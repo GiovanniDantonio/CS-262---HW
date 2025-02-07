@@ -1,14 +1,27 @@
 import socket
+import sqlite3
 import threading
 import hashlib
 import json
-
 import protocol
 
-# Global in-memory storage for accounts and messages
-accounts = {}  # username -> hashed_password
-pending_messages = {}  # username -> list of messages
-logged_in_clients = {}  # username -> client socket
+# Permanent Database Setup
+def init_db():
+    conn = sqlite3.connect('chat.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS accounts (
+                    username TEXT PRIMARY KEY,
+                    password TEXT NOT NULL
+                 )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sender TEXT NOT NULL,
+                    recipient TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    delivered INTEGER DEFAULT 0
+                 )''')
+    conn.commit()
+    conn.close()
 
 PORT = 12345
 HOST = '0.0.0.0'
@@ -28,67 +41,66 @@ def handle_client(client_socket, addr):
                 break
             command = data.get('command')
             response = {}
+            conn = sqlite3.connect('chat.db')
+            c = conn.cursor()
             
             if command == 'register':
                 user = data.get('username')
-                pwd = data.get('password')
-                if user in accounts:
+                pwd = hash_password(data.get('password'))
+                c.execute("SELECT username FROM accounts WHERE username = ?", (user,))
+                if c.fetchone():
                     response = {'status': 'error', 'message': 'Username already exists. Please log in.'}
                 else:
-                    accounts[user] = pwd
-                    pending_messages.setdefault(user, [])
+                    c.execute("INSERT INTO accounts (username, password) VALUES (?, ?)", (user, pwd))
+                    conn.commit()
                     response = {'status': 'ok', 'message': 'Account created successfully.'}
 
             elif command == 'login':
                 user = data.get('username')
-                pwd = data.get('password')
-                if user not in accounts:
+                pwd = hash_password(data.get('password'))
+                c.execute("SELECT password FROM accounts WHERE username = ?", (user,))
+                record = c.fetchone()
+                if not record:
                     response = {'status': 'error', 'message': 'Username not found. Please register.'}
-                elif accounts[user] != pwd:
+                elif record[0] != pwd:
                     response = {'status': 'error', 'message': 'Incorrect password.'}
                 else:
                     username = user
-                    logged_in_clients[user] = client_socket
-                    msgs = pending_messages.get(user, [])
-                    response = {'status': 'ok', 'message': f'Logged in. You have {len(msgs)} unread messages.'}
+                    c.execute("SELECT sender, message FROM messages WHERE recipient = ? AND delivered = 0", (user,))
+                    msgs = [{'from': row[0], 'message': row[1]} for row in c.fetchall()]
+                    response = {'status': 'ok', 'message': f'Logged in. You have {len(msgs)} unread messages.', 'messages': msgs}
+                    c.execute("UPDATE messages SET delivered = 1 WHERE recipient = ?", (user,))
+                    conn.commit()
 
             elif command == 'send':
                 sender = data.get('sender')
                 recipient = data.get('recipient')
                 message = data.get('message')
-                msg_obj = {'from': sender, 'message': message}
-                # Deliver immediately if recipient is logged in
-                if recipient in logged_in_clients:
-                    try:
-                        protocol.send_json(logged_in_clients[recipient], {'command': 'deliver', 'from': sender, 'message': message})
-                    except Exception as e:
-                        # If delivery fails, store the message
-                        pending_messages.setdefault(recipient, []).append(msg_obj)
-                else:
-                    pending_messages.setdefault(recipient, []).append(msg_obj)
+                c.execute("INSERT INTO messages (sender, recipient, message, delivered) VALUES (?, ?, ?, 0)", (sender, recipient, message))
+                conn.commit()
                 response = {'status': 'ok', 'message': 'Message sent.'}
 
             elif command == 'read':
                 user = data.get('username')
-                msgs = pending_messages.get(user, [])
+                c.execute("SELECT sender, message FROM messages WHERE recipient = ? AND delivered = 0", (user,))
+                msgs = [{'from': row[0], 'message': row[1]} for row in c.fetchall()]
                 response = {'status': 'ok', 'messages': msgs}
-                # Clear messages after reading
-                pending_messages[user] = []
+                c.execute("UPDATE messages SET delivered = 1 WHERE recipient = ?", (user,))
+                conn.commit()
 
             else:
                 response = {'status': 'error', 'message': 'Unknown command.'}
-            
+            conn.close()
             protocol.send_json(client_socket, response)
     except Exception as e:
         print(f"Error handling client {addr}: {e}")
     finally:
-        if username and username in logged_in_clients:
-            del logged_in_clients[username]
         client_socket.close()
         print(f"Client disconnected: {addr}")
 
 
 def start_server():
+    init_db()
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((HOST, PORT))
