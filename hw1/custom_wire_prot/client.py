@@ -1,18 +1,26 @@
 import socket
 import threading
-import json
+import struct
 import tkinter as tk
 from tkinter import simpledialog, scrolledtext, messagebox
-import json_prot.protocol as protocol
-import hashlib
 
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 12345
 
-# Utility function to hash password
-def hash_password(password):
-    import hashlib
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+# Custom wire protocol
+HEADER_SIZE = 4  # Fixed header size for message length
+def send_packet(sock, data):
+    encoded_data = data.encode('utf-8')
+    packet = struct.pack(f'!I{len(encoded_data)}s', len(encoded_data), encoded_data)
+    sock.sendall(packet)
+
+def recv_packet(sock):
+    header = sock.recv(HEADER_SIZE)
+    if not header:
+        return None
+    data_length = struct.unpack('!I', header)[0]
+    data = sock.recv(data_length).decode('utf-8')
+    return data
 
 class ChatClient:
     def __init__(self, master):
@@ -27,8 +35,6 @@ class ChatClient:
             return
         self.username = None
         self.create_login_widgets()
-        
-        # Start a thread to listen for incoming delivered messages
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
         self.listener_thread.start()
 
@@ -51,6 +57,41 @@ class ChatClient:
         self.login_button = tk.Button(self.login_frame, text='Login', command=self.login)
         self.login_button.grid(row=2, column=1, pady=5)
 
+    def clear_window(self):
+        for widget in self.master.winfo_children():
+            widget.destroy()
+
+    def register(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get().strip()
+        if not username or not password:
+            messagebox.showwarning('Input Error', 'Username and password required.')
+            return
+        request = f'register|{username}|{password}'
+        send_packet(self.sock, request)
+        response = recv_packet(self.sock)
+        if response.startswith('ok'):
+            messagebox.showinfo('Success', response.split('|')[1])
+        else:
+            messagebox.showerror('Error', response.split('|')[1])
+
+    def login(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get().strip()
+        if not username or not password:
+            messagebox.showwarning('Input Error', 'Username and password required.')
+            return
+        request = f'login|{username}|{password}'
+        send_packet(self.sock, request)
+        response = recv_packet(self.sock)
+        parts = response.split('|')
+        if parts[0] == 'ok':
+            self.username = username
+            unread_info = parts[1]
+            self.create_chat_widgets(unread_info)
+        else:
+            messagebox.showerror('Error', parts[1])
+
     def create_chat_widgets(self, unread_info=''):
         self.clear_window()
         self.master.title(f'Chat Client - {self.username}')
@@ -58,15 +99,12 @@ class ChatClient:
         self.chat_frame = tk.Frame(self.master)
         self.chat_frame.pack(padx=10, pady=10, fill='both', expand=True)
 
-        # Display unread message info
         self.info_label = tk.Label(self.chat_frame, text=unread_info)
         self.info_label.pack()
 
-        # Chat display area
         self.chat_display = scrolledtext.ScrolledText(self.chat_frame, state='disabled', width=50, height=15)
         self.chat_display.pack(pady=5)
 
-        # Frame for sending messages
         self.send_frame = tk.Frame(self.chat_frame)
         self.send_frame.pack(fill='x', pady=5)
 
@@ -81,99 +119,22 @@ class ChatClient:
         self.send_button = tk.Button(self.send_frame, text='Send', command=self.send_message)
         self.send_button.grid(row=0, column=2, rowspan=2, padx=5)
 
-        # Refresh button to read messages
-        self.refresh_button = tk.Button(self.chat_frame, text='Refresh Messages', command=self.read_messages)
-        self.refresh_button.pack(pady=5)
-
-        self.send_frame.columnconfigure(1, weight=1)
-
-    def clear_window(self):
-        for widget in self.master.winfo_children():
-            widget.destroy()
-
-    def register(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
-        if not username or not password:
-            messagebox.showwarning('Input Error', 'Username and password required.')
-            return
-        hashed = hash_password(password)
-        request = {'command': 'register', 'username': username, 'password': hashed}
-        protocol.send_json(self.sock, request)
-        response = protocol.recv_json(self.sock)
-        if response and response.get('status') == 'ok':
-            messagebox.showinfo('Success', response.get('message'))
-        else:
-            messagebox.showerror('Error', response.get('message') if response else 'No response')
-
-    def login(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
-        if not username or not password:
-            messagebox.showwarning('Input Error', 'Username and password required.')
-            return
-        hashed = hash_password(password)
-        request = {'command': 'login', 'username': username, 'password': hashed}
-        protocol.send_json(self.sock, request)
-        response = protocol.recv_json(self.sock)
-        if response and response.get('status') == 'ok':
-            self.username = username
-            unread = response.get('message', '')
-            self.create_chat_widgets(unread)
-        else:
-            messagebox.showerror('Error', response.get('message') if response else 'No response')
-
     def send_message(self):
         recipient = self.recipient_entry.get().strip()
         message_text = self.message_entry.get().strip()
         if not recipient or not message_text:
             messagebox.showwarning('Input Error', 'Recipient and message required.')
             return
-        request = {
-            'command': 'send',
-            'sender': self.username,
-            'recipient': recipient,
-            'message': message_text
-        }
-        protocol.send_json(self.sock, request)
-        response = protocol.recv_json(self.sock)
-        if response and response.get('status') == 'ok':
-            self.append_chat(f'Message sent to {recipient}')
-            self.message_entry.delete(0, tk.END)
-        else:
-            self.append_chat(f'Error: {response.get("message") if response else "No response"}')
-
-    def read_messages(self):
-        request = {'command': 'read', 'username': self.username}
-        protocol.send_json(self.sock, request)
-        response = protocol.recv_json(self.sock)
-        if response and response.get('status') == 'ok':
-            messages = response.get('messages', [])
-            if messages:
-                for msg in messages:
-                    self.append_chat(f"From {msg.get('from')}: {msg.get('message')}")
-            else:
-                self.append_chat('No new messages.')
-        else:
-            self.append_chat('Error reading messages.')
+        request = f'send|{self.username}|{recipient}|{message_text}'
+        send_packet(self.sock, request)
+        response = recv_packet(self.sock)
+        self.append_chat(response.split('|')[1])
 
     def append_chat(self, text):
         self.chat_display.config(state='normal')
         self.chat_display.insert(tk.END, text + '\n')
         self.chat_display.yview(tk.END)
         self.chat_display.config(state='disabled')
-
-    def listen_for_messages(self):
-        # Continuously listen for any delivered messages from the server
-        while True:
-            try:
-                data = protocol.recv_json(self.sock)
-                if data and data.get('command') == 'deliver':
-                    sender = data.get('from')
-                    message = data.get('message')
-                    self.append_chat(f"Delivered message from {sender}: {message}")
-            except Exception as e:
-                break
 
 if __name__ == '__main__':
     root = tk.Tk()

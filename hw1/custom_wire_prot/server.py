@@ -1,9 +1,7 @@
 import socket
 import sqlite3
 import threading
-import hashlib
-import json
-import json_prot.protocol as protocol
+import struct
 
 # Permanent Database Setup
 def init_db():
@@ -26,72 +24,80 @@ def init_db():
 PORT = 12345
 HOST = '0.0.0.0'
 
-# Utility function to hash a password using sha256
-def hash_password(password):
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+# Custom wire protocol
+HEADER_SIZE = 4  # Fixed header size for message length
+def send_packet(sock, data):
+    encoded_data = data.encode('utf-8')
+    packet = struct.pack(f'!I{len(encoded_data)}s', len(encoded_data), encoded_data)
+    sock.sendall(packet)
 
+def recv_packet(sock):
+    header = sock.recv(HEADER_SIZE)
+    if not header:
+        return None
+    data_length = struct.unpack('!I', header)[0]
+    data = sock.recv(data_length).decode('utf-8')
+    return data
 
 def handle_client(client_socket, addr):
     print(f"Client connected: {addr}")
     username = None
     try:
         while True:
-            data = protocol.recv_json(client_socket)
+            data = recv_packet(client_socket)
             if not data:
                 break
-            command = data.get('command')
-            response = {}
+            parts = data.split('|')
+            command = parts[0]
+            response = ""
             conn = sqlite3.connect('chat.db')
             c = conn.cursor()
             
             if command == 'register':
-                user = data.get('username')
-                pwd = hash_password(data.get('password'))
+                user, pwd = parts[1], parts[2]
                 c.execute("SELECT username FROM accounts WHERE username = ?", (user,))
                 if c.fetchone():
-                    response = {'status': 'error', 'message': 'Username already exists. Please log in.'}
+                    response = "error|Username already exists. Please log in."
                 else:
                     c.execute("INSERT INTO accounts (username, password) VALUES (?, ?)", (user, pwd))
                     conn.commit()
-                    response = {'status': 'ok', 'message': 'Account created successfully.'}
-
+                    response = "ok|Account created successfully."
+            
             elif command == 'login':
-                user = data.get('username')
-                pwd = hash_password(data.get('password'))
+                user, pwd = parts[1], parts[2]
                 c.execute("SELECT password FROM accounts WHERE username = ?", (user,))
                 record = c.fetchone()
                 if not record:
-                    response = {'status': 'error', 'message': 'Username not found. Please register.'}
+                    response = "error|Username not found. Please register."
                 elif record[0] != pwd:
-                    response = {'status': 'error', 'message': 'Incorrect password.'}
+                    response = "error|Incorrect password."
                 else:
                     username = user
                     c.execute("SELECT sender, message FROM messages WHERE recipient = ? AND delivered = 0", (user,))
-                    msgs = [{'from': row[0], 'message': row[1]} for row in c.fetchall()]
-                    response = {'status': 'ok', 'message': f'Logged in. You have {len(msgs)} unread messages.', 'messages': msgs}
+                    msgs = [f"{row[0]}:{row[1]}" for row in c.fetchall()]
+                    response = f"ok|Logged in. You have {len(msgs)} unread messages.|{'|'.join(msgs)}"
                     c.execute("UPDATE messages SET delivered = 1 WHERE recipient = ?", (user,))
                     conn.commit()
-
+            
             elif command == 'send':
-                sender = data.get('sender')
-                recipient = data.get('recipient')
-                message = data.get('message')
+                sender, recipient, message = parts[1], parts[2], parts[3]
                 c.execute("INSERT INTO messages (sender, recipient, message, delivered) VALUES (?, ?, ?, 0)", (sender, recipient, message))
                 conn.commit()
-                response = {'status': 'ok', 'message': 'Message sent.'}
-
+                response = "ok|Message sent."
+            
             elif command == 'read':
-                user = data.get('username')
+                user = parts[1]
                 c.execute("SELECT sender, message FROM messages WHERE recipient = ? AND delivered = 0", (user,))
-                msgs = [{'from': row[0], 'message': row[1]} for row in c.fetchall()]
-                response = {'status': 'ok', 'messages': msgs}
+                msgs = [f"{row[0]}:{row[1]}" for row in c.fetchall()]
+                response = f"ok|{'|'.join(msgs)}"
                 c.execute("UPDATE messages SET delivered = 1 WHERE recipient = ?", (user,))
                 conn.commit()
-
+            
             else:
-                response = {'status': 'error', 'message': 'Unknown command.'}
+                response = "error|Unknown command."
+            
             conn.close()
-            protocol.send_json(client_socket, response)
+            send_packet(client_socket, response)
     except Exception as e:
         print(f"Error handling client {addr}: {e}")
     finally:

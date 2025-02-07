@@ -1,23 +1,18 @@
-import json
+import socket
+import struct
 
+# Custom wire protocol
+HEADER_SIZE = 4  # Fixed header size for message length
 
-def send_json(sock, obj):
-    """Send a JSON object over the socket, appending a newline as delimiter."""
-    try:
-        msg = json.dumps(obj) + "\n"
-        sock.sendall(msg.encode('utf-8'))
-    except Exception as e:
-        return f"Error sending JSON: {e}"
+def send_packet(sock, data):
+    encoded_data = data.encode('utf-8')
+    packet = struct.pack(f'!I{len(encoded_data)}s', len(encoded_data), encoded_data)
+    sock.sendall(packet)
 
-
-def recv_json(sock):
-    """Receive a JSON object from the socket assuming each message is newline delimited."""
-    try:
-        # Create a file-like object to read one line at a time
-        f = sock.makefile('r')
-        line = f.readline()
-        if not line:
-            return None
-        return json.loads(line)
-    except Exception as e:
-        return f"Error receiving JSON: {e}"
+def recv_packet(sock):
+    header = sock.recv(HEADER_SIZE)
+    if not header:
+        return None
+    data_length = struct.unpack('!I', header)[0]
+    data = sock.recv(data_length).decode('utf-8')
+    return data
