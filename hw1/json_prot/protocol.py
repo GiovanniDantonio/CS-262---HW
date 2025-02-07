@@ -25,6 +25,7 @@ class MessageType(enum.Enum):
     SEND_MESSAGE = "send_message"
     GET_MESSAGES = "get_messages"
     DELETE_MESSAGES = "delete_messages"
+    BROADCAST = "broadcast"
     
     # System
     ERROR = "error"

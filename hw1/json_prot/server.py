@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 import protocol as protocol
 from protocol import MessageType, StatusCode
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -19,6 +20,12 @@ logger = logging.getLogger("chat_server")
 PORT = 12345
 HOST = '0.0.0.0'
 DB_PATH = 'chat.db'
+
+# Global variables
+server_socket = None
+db_conn = None
+cursor = None
+active_clients = {}  # Dictionary to store active client connections: {username: (conn, last_broadcast_time)}
 
 def init_db():
     """Initialize the SQLite database with required tables."""
@@ -54,6 +61,116 @@ def init_db():
 def hash_password(password: str) -> str:
     """Hash a password using SHA-256."""
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+def broadcast_updates():
+    """Broadcast updates to all connected clients."""
+    while True:
+        try:
+            time.sleep(5)  # Broadcast every 5 seconds
+            with threading.Lock():
+                # Get all online users
+                online_users = list(active_clients.keys())
+                
+                # Create broadcast message
+                for username, (conn, _) in active_clients.items():
+                    try:
+                        # Send user list update
+                        users_msg = protocol.create_message(
+                            MessageType.BROADCAST,
+                            {
+                                "type": "users",
+                                "users": online_users
+                            }
+                        )
+                        protocol.send_json(conn, users_msg)
+                        
+                        # Send messages update
+                        cursor.execute("""
+                            SELECT m.id, m.sender, m.recipient, m.content, m.timestamp
+                            FROM messages m
+                            WHERE m.recipient = ?
+                            ORDER BY m.timestamp DESC
+                            LIMIT 50
+                        """, (username,))
+                        messages = cursor.fetchall()
+                        
+                        messages_list = [
+                            {
+                                "id": msg[0],
+                                "sender": msg[1],
+                                "recipient": msg[2],
+                                "content": msg[3],
+                                "timestamp": msg[4]
+                            }
+                            for msg in messages
+                        ]
+                        
+                        msg_msg = protocol.create_message(
+                            MessageType.BROADCAST,
+                            {
+                                "type": "messages",
+                                "messages": messages_list
+                            }
+                        )
+                        protocol.send_json(conn, msg_msg)
+                        
+                    except Exception as e:
+                        logger.error(f"Error broadcasting to {username}: {e}")
+                        del active_clients[username]
+                        
+        except Exception as e:
+            logger.error(f"Error in broadcast thread: {e}")
+
+def broadcast_to_user(username: str):
+    """Send updates to a specific user."""
+    if username not in active_clients:
+        return
+        
+    conn = active_clients[username][0]
+    try:
+        # Send messages update
+        cursor.execute("""
+            SELECT m.id, m.sender, m.recipient, m.content, m.timestamp
+            FROM messages m
+            WHERE m.recipient = ?
+            ORDER BY m.timestamp DESC
+            LIMIT 50
+        """, (username,))
+        messages = cursor.fetchall()
+        
+        messages_list = [
+            {
+                "id": msg[0],
+                "sender": msg[1],
+                "recipient": msg[2],
+                "content": msg[3],
+                "timestamp": msg[4]
+            }
+            for msg in messages
+        ]
+        
+        msg_msg = protocol.create_message(
+            MessageType.BROADCAST,
+            {
+                "type": "messages",
+                "messages": messages_list
+            }
+        )
+        protocol.send_json(conn, msg_msg)
+        
+        # Send online users update
+        users_msg = protocol.create_message(
+            MessageType.BROADCAST,
+            {
+                "type": "users",
+                "users": list(active_clients.keys())
+            }
+        )
+        protocol.send_json(conn, users_msg)
+        
+    except Exception as e:
+        logger.error(f"Error broadcasting to {username}: {e}")
+        del active_clients[username]
 
 def handle_create_account(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle account creation request."""
@@ -114,6 +231,9 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
     )
     unread_count = c.fetchone()[0]
     
+    # Add to active clients
+    active_clients[username] = (c.connection, time.time())
+    
     return protocol.create_message(
         MessageType.LOGIN,
         {
@@ -160,12 +280,12 @@ def handle_list_accounts(data: dict, c: sqlite3.Cursor) -> dict:
 def handle_send_message(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle message sending request."""
     logger.debug(f"Handling send message request: {data}")
-    sender = data.get('sender')
+    sender = data.get('username')  
     recipient = data.get('recipient')
     content = data.get('content')
     
     if not all([sender, recipient, content]):
-        return protocol.create_error("Sender, recipient, and content required")
+        return protocol.create_error("Username, recipient, and content required")
     
     # Verify both users exist
     c.execute("SELECT username FROM accounts WHERE username IN (?, ?)", (sender, recipient))
@@ -177,11 +297,17 @@ def handle_send_message(data: dict, c: sqlite3.Cursor) -> dict:
         c.execute(
             """INSERT INTO messages (sender, recipient, content, timestamp) 
                VALUES (?, ?, ?, ?)""",
-            (sender, recipient, content, datetime.utcnow())
+            (sender, recipient, content, datetime.utcnow().isoformat())
         )
+        c.connection.commit()
+        
+        # Broadcast updates to both sender and recipient
+        broadcast_to_user(sender)
+        broadcast_to_user(recipient)
+        
         return protocol.create_message(
             MessageType.SEND_MESSAGE,
-            {"message_id": c.lastrowid},
+            {"message": "Message sent successfully"},
             StatusCode.SUCCESS
         )
     except Exception as e:
@@ -258,6 +384,7 @@ def handle_delete_messages(data: dict, c: sqlite3.Cursor) -> dict:
 def handle_client(client_socket: socket.socket, addr: tuple):
     """Handle client connection and route messages to appropriate handlers."""
     logger.info(f"New client connected: {addr}")
+    client_username = None
     try:
         while True:
             message = protocol.recv_json(client_socket)
@@ -294,6 +421,10 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                 
                 protocol.send_json(client_socket, response)
                 
+                # Track username after successful login
+                if message['type'] == MessageType.LOGIN.value and message['status'] == StatusCode.SUCCESS.value:
+                    client_username = message['data']['username']
+                    
             except Exception as e:
                 logger.error(f"Error handling message: {e}")
                 protocol.send_json(client_socket, protocol.create_error(str(e)))
@@ -304,37 +435,46 @@ def handle_client(client_socket: socket.socket, addr: tuple):
     except Exception as e:
         logger.error(f"Client connection error: {e}")
     finally:
+        # Remove client from active_clients
+        if client_username and client_username in active_clients:
+            del active_clients[client_username]
         client_socket.close()
         logger.info(f"Client disconnected: {addr}")
 
 def start_server():
     """Start the chat server."""
-    logger.info("Initializing server...")
+    global server_socket, db_conn, cursor
+    
+    # Initialize database
+    db_conn = sqlite3.connect(DB_PATH)
+    cursor = db_conn.cursor()
     init_db()
     
+    # Create server socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen()
+    
+    logger.info(f"Server started on {HOST}:{PORT}")
+    
+    # Start broadcast thread
+    broadcast_thread = threading.Thread(target=broadcast_updates, daemon=True)
+    broadcast_thread.start()
     
     try:
-        server_socket.bind((HOST, PORT))
-        server_socket.listen(5)
-        logger.info(f"Server listening on {HOST}:{PORT}")
-        
         while True:
-            client_socket, addr = server_socket.accept()
-            client_thread = threading.Thread(
-                target=handle_client,
-                args=(client_socket, addr)
-            )
-            client_thread.daemon = True
+            conn, addr = server_socket.accept()
+            logger.info(f"New connection from {addr}")
+            client_thread = threading.Thread(target=handle_client, args=(conn, addr))
             client_thread.start()
-            
     except KeyboardInterrupt:
         logger.info("Server shutting down...")
-    except Exception as e:
-        logger.error(f"Server error: {e}")
     finally:
-        server_socket.close()
+        if server_socket:
+            server_socket.close()
+        if db_conn:
+            db_conn.close()
 
 if __name__ == '__main__':
     start_server()

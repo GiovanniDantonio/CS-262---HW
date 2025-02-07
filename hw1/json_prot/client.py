@@ -51,6 +51,7 @@ class ChatClient:
             MessageType.SEND_MESSAGE.value: self.handle_send_message_response,
             MessageType.GET_MESSAGES.value: self.handle_get_messages_response,
             MessageType.DELETE_MESSAGES.value: self.handle_delete_messages_response,
+            MessageType.BROADCAST.value: self.handle_broadcast_message,
             MessageType.ERROR.value: self.handle_error_response
         }
         
@@ -143,6 +144,9 @@ class ChatClient:
         delete_btn = ttk.Button(button_frame, text='Delete Selected', command=self.delete_selected_messages)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
+        # Start automatic refresh
+        self.start_auto_refresh()
+
     def clear_window(self):
         """Clear all widgets from the window."""
         for widget in self.master.winfo_children():
@@ -212,7 +216,7 @@ class ChatClient:
         message = protocol.create_message(
             MessageType.SEND_MESSAGE,
             {
-                "sender": self.username,
+                "username": self.username,
                 "recipient": recipient,
                 "content": content
             }
@@ -256,6 +260,17 @@ class ChatClient:
         self.chat_display.yview(tk.END)
         self.chat_display.config(state='disabled')
 
+    def start_auto_refresh(self):
+        """Start automatic refresh of messages and users as backup."""
+        def refresh():
+            if hasattr(self, 'chat_display'):  # Only refresh if in chat mode
+                self.list_accounts()  # Refresh users
+                self.get_messages()   # Refresh messages
+                self.master.after(30000, refresh)  # Backup refresh every 30 seconds
+        
+        # Start the first refresh
+        self.master.after(0, refresh)
+
     # Message Handlers
     def handle_create_account_response(self, message: dict):
         """Handle create account response."""
@@ -268,13 +283,10 @@ class ChatClient:
         """Handle login response."""
         if message['status'] == StatusCode.SUCCESS.value:
             self.username = message['data']['username']
-            unread_count = message['data']['unread_count']
             self.create_chat_widgets()
-            self.append_chat(f"Welcome! You have {unread_count} unread messages.")
-            self.get_messages()  # Automatically fetch messages
-            self.list_accounts()  # Get initial user list
+            # Initial data load happens in start_auto_refresh
         else:
-            messagebox.showerror('Error', message['data'].get('message', 'Login failed'))
+            messagebox.showerror('Login Error', message['data'].get('message', 'Login failed'))
 
     def handle_list_accounts_response(self, message: dict):
         """Handle account list response."""
@@ -286,10 +298,11 @@ class ChatClient:
     def handle_send_message_response(self, message: dict):
         """Handle send message response."""
         if message['status'] == StatusCode.SUCCESS.value:
-            self.message_entry.delete(0, tk.END)
-            self.append_chat(f"Message sent successfully!")
+            self.message_entry.delete(0, tk.END)  # Clear message input
+            # No need to refresh as we'll get a broadcast
         else:
-            self.append_chat(f"Error sending message: {message['data'].get('message')}")
+            error_msg = message['data'].get('message', 'Unknown error')
+            self.append_chat(f"Error sending message: {error_msg}")
 
     def handle_get_messages_response(self, message: dict):
         """Handle get messages response."""
@@ -308,6 +321,33 @@ class ChatClient:
             self.append_chat(f"Successfully deleted {count} messages.")
         else:
             self.append_chat(f"Error deleting messages: {message['data'].get('message')}")
+
+    def handle_broadcast_message(self, message: dict):
+        """Handle broadcast messages from server."""
+        if not hasattr(self, 'chat_display'):
+            return  # Ignore broadcasts if not in chat mode
+            
+        broadcast_type = message['data'].get('type')
+        if broadcast_type == 'users':
+            # Update online users list
+            users = message['data'].get('users', [])
+            self.user_listbox.delete(0, tk.END)
+            for user in users:
+                if user != self.username:  # Don't show current user
+                    self.user_listbox.insert(tk.END, user)
+                    
+        elif broadcast_type == 'messages':
+            # Update messages
+            messages = message['data'].get('messages', [])
+            self.chat_display.config(state='normal')
+            self.chat_display.delete(1.0, tk.END)
+            for msg in messages:
+                sender = msg['sender']
+                content = msg['content']
+                timestamp = msg['timestamp']
+                self.chat_display.insert(tk.END, f"{timestamp} - {sender}: {content}\n")
+            self.chat_display.yview(tk.END)
+            self.chat_display.config(state='disabled')
 
     def handle_error_response(self, message: dict):
         """Handle error response."""
