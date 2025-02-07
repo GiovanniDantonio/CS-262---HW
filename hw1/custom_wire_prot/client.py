@@ -3,7 +3,7 @@ import threading
 import json
 import tkinter as tk
 from tkinter import simpledialog, scrolledtext, messagebox
-import protocol
+import json_prot.protocol as protocol
 import hashlib
 
 SERVER_HOST = '127.0.0.1'

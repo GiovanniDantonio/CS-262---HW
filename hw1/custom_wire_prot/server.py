@@ -3,7 +3,7 @@ import sqlite3
 import threading
 import hashlib
 import json
-import protocol
+import json_prot.protocol as protocol
 
 # Permanent Database Setup
 def init_db():
