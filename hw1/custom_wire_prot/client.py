@@ -93,31 +93,22 @@ class ChatClient:
             messagebox.showerror('Error', parts[1])
 
     def create_chat_widgets(self, unread_info=''):
-        self.clear_window()
-        self.master.title(f'Chat Client - {self.username}')
-        
-        self.chat_frame = tk.Frame(self.master)
-        self.chat_frame.pack(padx=10, pady=10, fill='both', expand=True)
+      self.clear_window()
+      self.master.title(f'Chat Client - {self.username}')
 
-        self.info_label = tk.Label(self.chat_frame, text=unread_info)
-        self.info_label.pack()
+      self.chat_frame = tk.Frame(self.master)
+      self.chat_frame.pack(padx=10, pady=10, fill='both', expand=True)
 
-        self.chat_display = scrolledtext.ScrolledText(self.chat_frame, state='disabled', width=50, height=15)
-        self.chat_display.pack(pady=5)
+      self.info_label = tk.Label(self.chat_frame, text=unread_info)
+      self.info_label.pack()
 
-        self.send_frame = tk.Frame(self.chat_frame)
-        self.send_frame.pack(fill='x', pady=5)
+      # Ensure chat_display is initialized
+      self.chat_display = scrolledtext.ScrolledText(self.chat_frame, state='disabled', width=50, height=15)
+      self.chat_display.pack(pady=5)
 
-        tk.Label(self.send_frame, text='Recipient:').grid(row=0, column=0, sticky='e')
-        self.recipient_entry = tk.Entry(self.send_frame)
-        self.recipient_entry.grid(row=0, column=1, sticky='we')
+      self.send_frame = tk.Frame(self.chat_frame)
+      self.send_frame.pack(fill='x', pady=5)
 
-        tk.Label(self.send_frame, text='Message:').grid(row=1, column=0, sticky='e')
-        self.message_entry = tk.Entry(self.send_frame, width=40)
-        self.message_entry.grid(row=1, column=1, sticky='we')
-
-        self.send_button = tk.Button(self.send_frame, text='Send', command=self.send_message)
-        self.send_button.grid(row=0, column=2, rowspan=2, padx=5)
 
     def send_message(self):
         recipient = self.recipient_entry.get().strip()
@@ -135,6 +126,22 @@ class ChatClient:
         self.chat_display.insert(tk.END, text + '\n')
         self.chat_display.yview(tk.END)
         self.chat_display.config(state='disabled')
+    
+    def listen_for_messages(self):
+      """Continuously listen for incoming messages from the server."""
+      while True:
+          try:
+              data = recv_packet(self.sock)  # Use the custom wire protocol
+              if data:
+                  if hasattr(self, 'chat_display'):  # Ensure chat_display exists
+                      self.append_chat(f"Server: {data}")
+                  else:
+                      print(f"Received message but chat display is not initialized: {data}")
+          except Exception as e:
+              print(f"Error receiving message: {e}")
+              break
+
+
 
 if __name__ == '__main__':
     root = tk.Tk()
