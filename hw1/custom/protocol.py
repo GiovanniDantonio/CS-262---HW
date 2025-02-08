@@ -2,7 +2,7 @@ import socket
 import struct
 
 # Custom wire protocol
-HEADER_SIZE = 4  # Fixed header size for message length
+HEADER_SIZE = 4
 
 def send_packet(sock, data):
     encoded_data = data.encode('utf-8')

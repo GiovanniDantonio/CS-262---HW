@@ -15,6 +15,7 @@
 1. Clone the repository:
    git clone [repo name]
    cd into repo folder
+   cd cs2620/hw/hw1/custom
    cd into whether you want json or custom
    pip install -r requirements.txt
    python3 server.py
