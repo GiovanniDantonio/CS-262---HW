@@ -8,6 +8,7 @@ from datetime import datetime
 import protocol as protocol
 from protocol import MessageType, StatusCode
 import time
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -16,10 +17,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat_server")
 
-# Constants
-PORT = 12345
-HOST = '0.0.0.0'
-DB_PATH = 'chat.db'
+# Load in Configuration File
+CONFIG_FILE = "server_config.json"
+default_config = {
+    "host": "0.0.0.0",
+    "port": 12345,
+    "db_path": "chat.db"
+}
+
+if os.path.isfile(CONFIG_FILE):
+    with open(CONFIG_FILE, "r") as f:
+        user_config = json.load(f)
+    # Merge user_config with default_config
+    config = {**default_config, **user_config}
+else:
+    logger.warning(f"No config file found at {CONFIG_FILE}. Using defaults.")
+    config = default_config
+
+HOST = config["host"]
+PORT = config["port"]
+DB_PATH = config["db_path"]
 
 # Global variables
 server_socket = None

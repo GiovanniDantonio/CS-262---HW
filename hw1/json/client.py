@@ -8,6 +8,7 @@ from protocol import MessageType, StatusCode
 import hashlib
 import logging
 from datetime import datetime
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -16,8 +17,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat_client")
 
-SERVER_HOST = '127.0.0.1'
-SERVER_PORT = 12345
+# configuration
+CONFIG_FILE = "client_config.json"
+default_config = {
+    "host": "127.0.0.1",
+    "port": 12345
+}
+
+if os.path.isfile(CONFIG_FILE):
+    with open(CONFIG_FILE, "r") as f:
+        user_config = json.load(f)
+    config = {**default_config, **user_config}
+else:
+    logger.warning(f"No config file found at {CONFIG_FILE}. Using defaults.")
+    config = default_config
+
+SERVER_HOST = config["host"]
+SERVER_PORT = config["port"]
 
 def hash_password(password: str) -> str:
     """Hash a password using SHA-256."""
