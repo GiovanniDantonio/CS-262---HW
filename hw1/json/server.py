@@ -243,6 +243,45 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
         StatusCode.SUCCESS
     )
 
+def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
+    """Handle account deletion request."""
+    logger.debug(f"Handling delete account request: {data}")
+    username = data.get('username')
+    
+    if not username:
+        return protocol.create_error("Username is required to delete an account.")
+    
+    # Check if user exists
+    c.execute("SELECT username FROM accounts WHERE username = ?", (username,))
+    record = c.fetchone()
+    if not record:
+        return protocol.create_error("User not found.")
+
+    try:
+        c.execute(
+            "DELETE FROM messages WHERE sender = ? OR recipient = ?",
+            (username, username)
+        )
+        c.execute(
+            "DELETE FROM accounts WHERE username = ?",
+            (username,)
+        )
+        c.connection.commit()
+        
+        # If the user is currently active, remove them
+        if username in active_clients:
+            del active_clients[username]
+        
+        return protocol.create_message(
+            MessageType.DELETE_ACCOUNT,
+            {"username": username},
+            StatusCode.SUCCESS
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete account for {username}: {e}")
+        return protocol.create_error("Failed to delete account.")
+
+
 def handle_list_accounts(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle account listing request."""
     logger.debug(f"Handling list accounts request: {data}")
@@ -409,7 +448,8 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                     MessageType.LIST_ACCOUNTS: handle_list_accounts,
                     MessageType.SEND_MESSAGE: handle_send_message,
                     MessageType.GET_MESSAGES: handle_get_messages,
-                    MessageType.DELETE_MESSAGES: handle_delete_messages
+                    MessageType.DELETE_MESSAGES: handle_delete_messages,
+                    MessageType.DELETE_ACCOUNT: handle_delete_account
                 }
                 
                 handler = handler_map.get(msg_type)

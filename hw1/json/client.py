@@ -51,8 +51,10 @@ class ChatClient:
             MessageType.SEND_MESSAGE.value: self.handle_send_message_response,
             MessageType.GET_MESSAGES.value: self.handle_get_messages_response,
             MessageType.DELETE_MESSAGES.value: self.handle_delete_messages_response,
+            MessageType.DELETE_ACCOUNT.value: self.handle_delete_account_response,
             MessageType.BROADCAST.value: self.handle_broadcast_message,
             MessageType.ERROR.value: self.handle_error_response
+
         }
         
         # Start listener thread
@@ -144,8 +146,33 @@ class ChatClient:
         delete_btn = ttk.Button(button_frame, text='Delete Selected', command=self.delete_selected_messages)
         delete_btn.pack(side=tk.LEFT, padx=5)
 
+        delete_account_btn = ttk.Button(button_frame, text='Delete Account', command=self.delete_account)
+        delete_account_btn.pack(side=tk.LEFT, padx=5)
+
         # Start automatic refresh
         self.start_auto_refresh()
+    def delete_account(self):
+        """Send a request to delete the currently logged-in account."""
+        if not self.username:
+            messagebox.showwarning("No User", "You are not logged in with any account.")
+            return
+
+        confirm = messagebox.askyesno(
+            "Confirm Account Deletion",
+            f"Are you sure you want to delete account '{self.username}'?\n"
+            "All messages (read or unread) will be permanently removed!"
+        )
+        if not confirm:
+            return
+
+        logger.debug(f"Sending delete account request for user: {self.username}")
+        message = protocol.create_message(
+            MessageType.DELETE_ACCOUNT,
+            {
+                "username": self.username
+            }
+        )
+        protocol.send_json(self.sock, message)
 
     def clear_window(self):
         """Clear all widgets from the window."""
@@ -321,6 +348,21 @@ class ChatClient:
             self.append_chat(f"Successfully deleted {count} messages.")
         else:
             self.append_chat(f"Error deleting messages: {message['data'].get('message')}")
+    
+    def handle_delete_account_response(self, message: dict):
+        """Handle server response to account deletion."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            deleted_user = message['data'].get('username', 'Unknown')
+            messagebox.showinfo("Account Deleted", f"Account '{deleted_user}' has been deleted.")
+            
+            # Log the client out locally and close the window
+            self.sock.close()
+            self.master.destroy()
+        else:
+            # Show the error message from the server
+            error_msg = message['data'].get('message', 'Unknown error occurred')
+            messagebox.showerror('Delete Account Error', error_msg)
+
 
     def handle_broadcast_message(self, message: dict):
         """Handle broadcast messages from server."""
