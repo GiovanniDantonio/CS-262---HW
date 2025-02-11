@@ -223,10 +223,11 @@ class ChatClient:
                 break
 
     def append_chat(self, text):
-        self.chat_display.config(state='normal')
-        self.chat_display.insert(tk.END, text + '\n')
-        self.chat_display.yview(tk.END)
-        self.chat_display.config(state='disabled')
+        if self.chat_display and self.chat_display.winfo_exists():
+            self.chat_display.config(state='normal')
+            self.chat_display.insert(tk.END, text + '\n')
+            self.chat_display.yview(tk.END)
+            self.chat_display.config(state='disabled')
 
 
 if __name__ == '__main__':

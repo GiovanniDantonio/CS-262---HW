@@ -15,11 +15,11 @@ class MessageType(enum.Enum):
     # Authentication
     CREATE_ACCOUNT = "create_account"
     LOGIN = "login"
-    LOGOUT = "logout"
     
     # Account Management
     LIST_ACCOUNTS = "list_accounts"
     DELETE_ACCOUNT = "delete_account"
+    LOGOUT = "logout"
     
     # Messaging
     SEND_MESSAGE = "send_message"

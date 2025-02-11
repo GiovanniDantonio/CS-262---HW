@@ -42,7 +42,8 @@ DB_PATH = config["db_path"]
 server_socket = None
 db_conn = None
 cursor = None
-active_clients = {}  # Dictionary to store active client connections: {username: (conn, last_broadcast_time)}
+# Dictionary to store active client connections: {username: (conn, last_broadcast_time)}
+active_clients = {}
 
 def init_db():
     """Initialize the SQLite database with required tables."""
@@ -133,7 +134,6 @@ def broadcast_updates():
                         
                     except Exception as e:
                         logger.error(f"Error broadcasting to {username}: {e}")
-                        del active_clients[username]
                         
         except Exception as e:
             logger.error(f"Error in broadcast thread: {e}")
@@ -143,7 +143,7 @@ def broadcast_to_user(username: str):
     if username not in active_clients:
         return
         
-    conn = active_clients[username][0]
+    user_socket = active_clients[username][0]
     try:
         # Send messages update
         cursor.execute("""
@@ -173,7 +173,7 @@ def broadcast_to_user(username: str):
                 "messages": messages_list
             }
         )
-        protocol.send_json(conn, msg_msg)
+        protocol.send_json(user_socket, msg_msg)
         
         # Send online users update
         users_msg = protocol.create_message(
@@ -183,7 +183,7 @@ def broadcast_to_user(username: str):
                 "users": list(active_clients.keys())
             }
         )
-        protocol.send_json(conn, users_msg)
+        protocol.send_json(user_socket, users_msg)
         
     except Exception as e:
         logger.error(f"Error broadcasting to {username}: {e}")
@@ -248,9 +248,6 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
     )
     unread_count = c.fetchone()[0]
     
-    # Add to active clients
-    active_clients[username] = (c.connection, time.time())
-    
     return protocol.create_message(
         MessageType.LOGIN,
         {
@@ -259,6 +256,27 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
         },
         StatusCode.SUCCESS
     )
+
+def handle_logout(data: dict, c: sqlite3.Cursor) -> dict:
+    """Handle user logout request."""
+    logger.debug(f"Handling logout request: {data}")
+    username = data.get('username')
+
+    if not username:
+        return protocol.create_error("Username is required to logout.")
+
+    # If the user is in active_clients, remove them
+    if username in active_clients:
+        del active_clients[username]
+        logger.info(f"User '{username}' has been logged out successfully.")
+        return protocol.create_message(
+            MessageType.LOGOUT,
+            {},
+            StatusCode.SUCCESS
+        )
+    else:
+        return protocol.create_error("User not currently logged in or not found in active list.")
+
 
 def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle account deletion request."""
@@ -345,9 +363,18 @@ def handle_send_message(data: dict, c: sqlite3.Cursor) -> dict:
     
     # Verify both users exist
     c.execute("SELECT username FROM accounts WHERE username IN (?, ?)", (sender, recipient))
+
     users = c.fetchall()
-    if len(users) != 2:
-        return protocol.create_error("Invalid sender or recipient")
+    found_usernames = [u[0] for u in users]
+    print("HERE ARE THE USERS:")
+    print(users)
+    if sender == recipient:
+    # Sending to yourself
+        if len(found_usernames) != 1 or found_usernames[0] != sender:
+            return protocol.create_error("Invalid sender or recipient (self-send failed).")
+    else:
+        if len(found_usernames) != 2:
+            return protocol.create_error("Invalid sender or recipient (two-user case).")
     
     try:
         c.execute(
@@ -446,8 +473,8 @@ def handle_client(client_socket: socket.socket, addr: tuple):
             message = protocol.recv_json(client_socket)
             if not message:
                 break
-                
-            if isinstance(message, str):  # Error occurred
+            # Error occurred
+            if isinstance(message, str):
                 logger.error(f"Error receiving message: {message}")
                 continue
                 
@@ -466,7 +493,8 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                     MessageType.SEND_MESSAGE: handle_send_message,
                     MessageType.GET_MESSAGES: handle_get_messages,
                     MessageType.DELETE_MESSAGES: handle_delete_messages,
-                    MessageType.DELETE_ACCOUNT: handle_delete_account
+                    MessageType.DELETE_ACCOUNT: handle_delete_account,
+                    MessageType.LOGOUT: handle_logout
                 }
                 
                 handler = handler_map.get(msg_type)
@@ -480,7 +508,11 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                 
                 # Track username after successful login
                 if message['type'] == MessageType.LOGIN.value and message['status'] == StatusCode.SUCCESS.value:
-                    client_username = message['data']['username']
+                    username = data['username']
+                    client_username = username
+                    
+                    # Store the actual TCP socket plus timestamp
+                    active_clients[username] = (client_socket, time.time())
                     
             except Exception as e:
                 logger.error(f"Error handling message: {e}")
@@ -492,7 +524,6 @@ def handle_client(client_socket: socket.socket, addr: tuple):
     except Exception as e:
         logger.error(f"Client connection error: {e}")
     finally:
-        # Remove client from active_clients
         if client_username and client_username in active_clients:
             del active_clients[client_username]
         client_socket.close()

@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 import os
 
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -68,6 +69,7 @@ class ChatClient:
             MessageType.GET_MESSAGES.value: self.handle_get_messages_response,
             MessageType.DELETE_MESSAGES.value: self.handle_delete_messages_response,
             MessageType.DELETE_ACCOUNT.value: self.handle_delete_account_response,
+            MessageType.LOGOUT.value: self.handle_logout_response,
             MessageType.BROADCAST.value: self.handle_broadcast_message,
             MessageType.ERROR.value: self.handle_error_response
 
@@ -125,6 +127,9 @@ class ChatClient:
         
         refresh_users_btn = ttk.Button(user_frame, text="Refresh Users", command=self.list_accounts)
         refresh_users_btn.pack(fill='x', pady=(5, 0))
+
+        self.logout_button = tk.Button(self.chat_frame, text='Logout', command=self.logout)
+        self.logout_button.pack()
 
         # Chat display
         chat_display_frame = ttk.LabelFrame(self.chat_frame, text="Messages", padding="5")
@@ -233,6 +238,26 @@ class ChatClient:
         )
         protocol.send_json(self.sock, message)
 
+    def logout(self):
+        """
+        Sends a logout request to the server for the current user.
+        The server's response is handled in handle_logout_response.
+        """
+        if not self.username:
+            messagebox.showinfo("No user logged in", "You are not currently logged in.")
+            return
+
+        # Build and send the logout request
+        logout_msg = protocol.create_message(
+            MessageType.LOGOUT,
+            {"username": self.username}
+        )
+        protocol.send_json(self.sock, logout_msg)
+        
+        # We won't clear self.username here, because we wait for server confirmation
+        # which will come into handle_logout_response (and do the actual reset).
+
+
     def list_accounts(self, pattern: str = '%'):
         """Request list of accounts matching pattern."""
         logger.debug(f"Requesting account list with pattern: {pattern}")
@@ -330,6 +355,21 @@ class ChatClient:
             # Initial data load happens in start_auto_refresh
         else:
             messagebox.showerror('Login Error', message['data'].get('message', 'Login failed'))
+    
+    def handle_logout_response(self, message: dict):
+        """Handle server response to the logout request."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            logger.info("Logout successful")
+            # Clear username
+            self.username = None
+            # Re-display the login widgets
+            self.create_login_widgets()
+        else:
+            # Show error from the server
+            error_msg = message['data'].get('message', 'Unknown error occurred')
+            logger.error(f"Logout failed: {error_msg}")
+            messagebox.showerror("Logout Error", error_msg)
+
 
     def handle_list_accounts_response(self, message: dict):
         """Handle account list response."""
