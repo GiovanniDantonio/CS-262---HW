@@ -2,7 +2,7 @@ import socket
 import threading
 import json
 import tkinter as tk
-from tkinter import simpledialog, ttk, messagebox
+from tkinter import simpledialog, ttk, messagebox, scrolledtext
 import protocol as protocol
 from protocol import MessageType, StatusCode
 import hashlib
@@ -127,9 +127,10 @@ class ChatClient:
         
         refresh_users_btn = ttk.Button(user_frame, text="Refresh Users", command=self.list_accounts)
         refresh_users_btn.pack(fill='x', pady=(5, 0))
-
-        self.logout_button = tk.Button(self.chat_frame, text='Logout', command=self.logout)
-        self.logout_button.pack()
+        
+        # Add logout button to top frame
+        self.logout_button = ttk.Button(top_frame, text='Logout', command=self.logout)
+        self.logout_button.pack(side=tk.RIGHT, padx=5)
 
         # Chat display
         chat_display_frame = ttk.LabelFrame(self.chat_frame, text="Messages", padding="5")
@@ -160,6 +161,14 @@ class ChatClient:
         # Pack the Treeview and scrollbar
         self.chat_display.pack(side=tk.LEFT, fill='both', expand=True)
         scrollbar.pack(side=tk.RIGHT, fill='y')
+
+        # System message display (for notifications, errors, etc.)
+        self.system_display = scrolledtext.ScrolledText(
+            chat_display_frame,
+            wrap=tk.WORD,
+            height=4
+        )
+        self.system_display.pack(fill='x', pady=(5, 0))
         
         # Message input area
         input_frame = ttk.Frame(self.chat_frame)
@@ -270,6 +279,9 @@ class ChatClient:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
 
+        # Stop auto-refresh immediately to prevent race conditions
+        self.stop_auto_refresh()
+        
         # Build and send the logout request
         logout_msg = protocol.create_message(
             MessageType.LOGOUT,
@@ -277,9 +289,10 @@ class ChatClient:
         )
         protocol.send_json(self.sock, logout_msg)
         
-        # We won't clear self.username here, because we wait for server confirmation
-        # which will come into handle_logout_response (and do the actual reset).
-
+        # Clear UI immediately since we've already stopped auto-refresh
+        self.username = None
+        self.clear_window()
+        self.create_login_widgets()
 
     def list_accounts(self, pattern: str = '%'):
         """Request list of accounts matching pattern."""
@@ -356,12 +369,29 @@ class ChatClient:
 
     def start_auto_refresh(self):
         """Start automatic refresh of messages and users as backup."""
+        self._refresh_after_id = None  # Store the after ID
+        
         def refresh():
             if self.username:  # Only refresh if logged in
                 self.get_messages(int(self.message_limit.get()))
                 self.list_accounts()
-            self.master.after(5000, refresh)  # Schedule next refresh in 5 seconds
+                self._refresh_after_id = self.master.after(5000, refresh)  # Store the ID
+            # Don't schedule next refresh if logged out
         refresh()
+
+    def stop_auto_refresh(self):
+        """Stop the automatic refresh."""
+        if hasattr(self, '_refresh_after_id') and self._refresh_after_id:
+            self.master.after_cancel(self._refresh_after_id)
+            self._refresh_after_id = None
+
+    def append_chat(self, text: str):
+        """Append text to system message display."""
+        if hasattr(self, 'system_display'):
+            self.system_display.config(state='normal')
+            self.system_display.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - {text}\n")
+            self.system_display.see(tk.END)
+            self.system_display.config(state='disabled')
 
     # Message Handlers
     def handle_create_account_response(self, message: dict):
@@ -383,16 +413,16 @@ class ChatClient:
     def handle_logout_response(self, message: dict):
         """Handle server response to the logout request."""
         if message['status'] == StatusCode.SUCCESS.value:
-            logger.info("Logout successful")
-            # Clear username
-            self.username = None
-            # Re-display the login widgets
-            self.create_login_widgets()
+            # UI is already cleared, just show success message
+            messagebox.showinfo('Success', 'Logged out successfully')
         else:
-            # Show error from the server
-            error_msg = message['data'].get('message', 'Unknown error occurred')
-            logger.error(f"Logout failed: {error_msg}")
-            messagebox.showerror("Logout Error", error_msg)
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Logout Error', f'Failed to logout: {error_msg}')
+            # On error, restore the chat interface
+            self.username = message['data'].get('username')
+            if self.username:
+                self.create_chat_widgets()
+                self.start_auto_refresh()
 
 
     def handle_list_accounts_response(self, message: dict):
@@ -440,12 +470,12 @@ class ChatClient:
         """Handle delete messages response."""
         if message['status'] == StatusCode.SUCCESS.value:
             deleted_count = message['data'].get('deleted_count', 0)
-            messagebox.showinfo('Success', f'Successfully deleted {deleted_count} message(s).')
+            self.append_chat(f"Successfully deleted {deleted_count} message(s).")
             # Refresh messages to update the display
             self.get_messages(int(self.message_limit.get()))
         else:
             error_msg = message['data'].get('message', 'Unknown error')
-            messagebox.showerror('Error', f'Failed to delete messages: {error_msg}')
+            self.append_chat(f"Error deleting messages: {error_msg}")
 
     def handle_delete_account_response(self, message: dict):
         """Handle server response to account deletion."""
@@ -494,6 +524,13 @@ class ChatClient:
         error_msg = message['data'].get('message', 'Unknown error occurred')
         logger.error(f"Received error: {error_msg}")
         
+        # Special handling for "not logged in" errors during logout
+        if "not logged in" in error_msg.lower() and not self.username:
+            # We're already logged out, so just ensure we're at login screen
+            self.clear_window()
+            self.create_login_widgets()
+            return
+            
         # If we're in chat mode (chat_display exists), append to chat
         if hasattr(self, 'chat_display'):
             self.append_chat(f"Error: {error_msg}")
