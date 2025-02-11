@@ -161,7 +161,12 @@ class ChatClient:
         button_frame = ttk.Frame(self.chat_frame)
         button_frame.pack(fill='x', pady=(10, 0))
         
-        refresh_btn = ttk.Button(button_frame, text='Refresh Messages', command=self.get_messages)
+        ttk.Label(button_frame, text='Messages to show:').pack(side=tk.LEFT, padx=5)
+        self.message_limit = ttk.Combobox(button_frame, values=['10', '25', '50', '100'], width=5, state='readonly')
+        self.message_limit.set('10')  # default value
+        self.message_limit.pack(side=tk.LEFT, padx=5)
+        
+        refresh_btn = ttk.Button(button_frame, text='Refresh Messages', command=lambda: self.get_messages(int(self.message_limit.get())))
         refresh_btn.pack(side=tk.LEFT, padx=5)
         
         delete_btn = ttk.Button(button_frame, text='Delete Selected', command=self.delete_selected_messages)
@@ -323,21 +328,20 @@ class ChatClient:
 
     def append_chat(self, text: str):
         """Append text to chat display."""
-        self.chat_display.config(state='normal')
-        self.chat_display.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - {text}\n")
-        self.chat_display.yview(tk.END)
-        self.chat_display.config(state='disabled')
+        if hasattr(self, 'chat_display'):
+            self.chat_display.config(state='normal')
+            self.chat_display.insert(tk.END, f"{text}\n")
+            self.chat_display.see(tk.END)
+            self.chat_display.config(state='disabled')
 
     def start_auto_refresh(self):
         """Start automatic refresh of messages and users as backup."""
         def refresh():
-            if hasattr(self, 'chat_display'):  # Only refresh if in chat mode
-                self.list_accounts()  # Refresh users
-                self.get_messages()   # Refresh messages
-                self.master.after(30000, refresh)  # Backup refresh every 30 seconds
-        
-        # Start the first refresh
-        self.master.after(0, refresh)
+            if self.username:  # Only refresh if logged in
+                self.get_messages(int(self.message_limit.get()))
+                self.list_accounts()
+            self.master.after(5000, refresh)  # Schedule next refresh in 5 seconds
+        refresh()
 
     # Message Handlers
     def handle_create_account_response(self, message: dict):
@@ -391,11 +395,24 @@ class ChatClient:
         """Handle get messages response."""
         if message['status'] == StatusCode.SUCCESS.value:
             messages = message['data']['messages']
+            # Clear the chat display first
+            self.chat_display.config(state='normal')
+            self.chat_display.delete(1.0, tk.END)
+            
             if messages:
-                for msg in messages:
-                    self.append_chat(f"From {msg['sender']}: {msg['content']}")
+                # Display messages in reverse order (newest last)
+                for msg in reversed(messages):
+                    timestamp = msg.get('timestamp', '')
+                    sender = msg.get('sender', 'unknown')
+                    content = msg.get('content', '')
+                    formatted_msg = f"{timestamp} - From {sender}: {content}\n"
+                    self.chat_display.insert(tk.END, formatted_msg)
             else:
-                self.append_chat("No new messages.")
+                self.chat_display.insert(tk.END, "No messages.\n")
+            
+            # Scroll to bottom and disable editing
+            self.chat_display.see(tk.END)
+            self.chat_display.config(state='disabled')
 
     def handle_delete_messages_response(self, message: dict):
         """Handle delete messages response."""
@@ -444,7 +461,7 @@ class ChatClient:
                 content = msg['content']
                 timestamp = msg['timestamp']
                 self.chat_display.insert(tk.END, f"{timestamp} - {sender}: {content}\n")
-            self.chat_display.yview(tk.END)
+            self.chat_display.see(tk.END)
             self.chat_display.config(state='disabled')
 
     def handle_error_response(self, message: dict):
