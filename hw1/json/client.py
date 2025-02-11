@@ -387,11 +387,13 @@ class ChatClient:
 
     def append_chat(self, text: str):
         """Append text to system message display."""
-        if hasattr(self, 'system_display'):
+        if hasattr(self, 'system_display') and not self.system_display.winfo_exists():
             self.system_display.config(state='normal')
             self.system_display.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - {text}\n")
             self.system_display.see(tk.END)
             self.system_display.config(state='disabled')
+        else:
+          return
 
     # Message Handlers
     def handle_create_account_response(self, message: dict):
