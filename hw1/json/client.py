@@ -2,7 +2,7 @@ import socket
 import threading
 import json
 import tkinter as tk
-from tkinter import simpledialog, scrolledtext, messagebox, ttk
+from tkinter import simpledialog, ttk, messagebox
 import protocol as protocol
 from protocol import MessageType, StatusCode
 import hashlib
@@ -135,14 +135,32 @@ class ChatClient:
         chat_display_frame = ttk.LabelFrame(self.chat_frame, text="Messages", padding="5")
         chat_display_frame.pack(fill='both', expand=True, pady=(0, 10))
         
-        self.chat_display = scrolledtext.ScrolledText(
-            chat_display_frame, 
-            wrap=tk.WORD,
-            width=50, 
-            height=20
+        # Create Treeview for messages
+        self.chat_display = ttk.Treeview(
+            chat_display_frame,
+            columns=('timestamp', 'sender', 'content'),
+            show='headings',
+            selectmode='extended'  # Allow multiple selection
         )
-        self.chat_display.pack(fill='both', expand=True)
-
+        
+        # Configure columns
+        self.chat_display.heading('timestamp', text='Time')
+        self.chat_display.heading('sender', text='From')
+        self.chat_display.heading('content', text='Message')
+        
+        # Set column widths
+        self.chat_display.column('timestamp', width=100)
+        self.chat_display.column('sender', width=100)
+        self.chat_display.column('content', width=300)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(chat_display_frame, orient=tk.VERTICAL, command=self.chat_display.yview)
+        self.chat_display.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack the Treeview and scrollbar
+        self.chat_display.pack(side=tk.LEFT, fill='both', expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill='y')
+        
         # Message input area
         input_frame = ttk.Frame(self.chat_frame)
         input_frame.pack(fill='x')
@@ -310,10 +328,20 @@ class ChatClient:
 
     def delete_selected_messages(self):
         """Delete selected messages."""
-        # Implementation depends on how you track message IDs in the UI
-        selected_ids = []  # Get these from your UI
-        if not selected_ids:
+        selected_items = self.chat_display.selection()
+        if not selected_items:
             messagebox.showwarning('Selection Error', 'No messages selected.')
+            return
+        
+        # Convert selected items (which are message IDs) to integers
+        selected_ids = [int(item) for item in selected_items]
+        
+        # Confirm deletion
+        confirm = messagebox.askyesno(
+            'Confirm Deletion',
+            f'Are you sure you want to delete {len(selected_ids)} message(s)?'
+        )
+        if not confirm:
             return
             
         logger.debug(f"Deleting messages: {selected_ids}")
@@ -325,14 +353,6 @@ class ChatClient:
             }
         )
         protocol.send_json(self.sock, message)
-
-    def append_chat(self, text: str):
-        """Append text to chat display."""
-        if hasattr(self, 'chat_display'):
-            self.chat_display.config(state='normal')
-            self.chat_display.insert(tk.END, f"{text}\n")
-            self.chat_display.see(tk.END)
-            self.chat_display.config(state='disabled')
 
     def start_auto_refresh(self):
         """Start automatic refresh of messages and users as backup."""
@@ -395,33 +415,38 @@ class ChatClient:
         """Handle get messages response."""
         if message['status'] == StatusCode.SUCCESS.value:
             messages = message['data']['messages']
-            # Clear the chat display first
-            self.chat_display.config(state='normal')
-            self.chat_display.delete(1.0, tk.END)
+            
+            # Clear existing messages
+            for item in self.chat_display.get_children():
+                self.chat_display.delete(item)
             
             if messages:
                 # Display messages in reverse order (newest last)
                 for msg in reversed(messages):
+                    msg_id = msg.get('id', '')
                     timestamp = msg.get('timestamp', '')
                     sender = msg.get('sender', 'unknown')
                     content = msg.get('content', '')
-                    formatted_msg = f"{timestamp} - From {sender}: {content}\n"
-                    self.chat_display.insert(tk.END, formatted_msg)
-            else:
-                self.chat_display.insert(tk.END, "No messages.\n")
+                    
+                    # Insert into treeview with message ID as item ID
+                    self.chat_display.insert('', 'end', iid=str(msg_id),
+                                          values=(timestamp, sender, content))
             
-            # Scroll to bottom and disable editing
-            self.chat_display.see(tk.END)
-            self.chat_display.config(state='disabled')
+            # Scroll to bottom
+            if self.chat_display.get_children():
+                self.chat_display.see(self.chat_display.get_children()[-1])
 
     def handle_delete_messages_response(self, message: dict):
         """Handle delete messages response."""
         if message['status'] == StatusCode.SUCCESS.value:
-            count = message['data']['deleted_count']
-            self.append_chat(f"Successfully deleted {count} messages.")
+            deleted_count = message['data'].get('deleted_count', 0)
+            messagebox.showinfo('Success', f'Successfully deleted {deleted_count} message(s).')
+            # Refresh messages to update the display
+            self.get_messages(int(self.message_limit.get()))
         else:
-            self.append_chat(f"Error deleting messages: {message['data'].get('message')}")
-    
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Error', f'Failed to delete messages: {error_msg}')
+
     def handle_delete_account_response(self, message: dict):
         """Handle server response to account deletion."""
         if message['status'] == StatusCode.SUCCESS.value:
@@ -454,15 +479,15 @@ class ChatClient:
         elif broadcast_type == 'messages':
             # Update messages
             messages = message['data'].get('messages', [])
-            self.chat_display.config(state='normal')
-            self.chat_display.delete(1.0, tk.END)
             for msg in messages:
-                sender = msg['sender']
-                content = msg['content']
-                timestamp = msg['timestamp']
-                self.chat_display.insert(tk.END, f"{timestamp} - {sender}: {content}\n")
-            self.chat_display.see(tk.END)
-            self.chat_display.config(state='disabled')
+                msg_id = msg.get('id', '')
+                timestamp = msg.get('timestamp', '')
+                sender = msg.get('sender', 'unknown')
+                content = msg.get('content', '')
+                
+                # Insert into treeview with message ID as item ID
+                self.chat_display.insert('', 'end', iid=str(msg_id),
+                                      values=(timestamp, sender, content))
 
     def handle_error_response(self, message: dict):
         """Handle error response."""
