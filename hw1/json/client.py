@@ -58,6 +58,7 @@ class ChatClient:
             return
             
         self.username = None
+        self._logging_out = False  # Track logout state
         self.create_login_widgets()
         
         # Message handlers for different message types
@@ -75,6 +76,9 @@ class ChatClient:
 
         }
         
+        # Create stop event for listener thread
+        self.stop_event = threading.Event()
+
         # Start listener thread
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
         self.listener_thread.start()
@@ -279,6 +283,10 @@ class ChatClient:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
 
+        # Set logging out state
+        self._logging_out = True
+        logger.debug("Starting logout process")
+        
         # Stop auto-refresh immediately to prevent race conditions
         self.stop_auto_refresh()
         
@@ -289,7 +297,24 @@ class ChatClient:
         )
         protocol.send_json(self.sock, logout_msg)
         
-        # Clear UI immediately since we've already stopped auto-refresh
+        # Give a small delay for the server to process logout
+        self.master.after(100, self._complete_logout)
+
+    def _complete_logout(self):
+        """Complete the logout process by cleaning up resources."""
+        logger.debug("Completing logout process")
+        
+        # Stop listener thread first
+        self.stop_listener()
+        
+        # Close socket
+        try:
+            self.sock.close()
+            logger.info("Socket closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing socket: {e}")
+        
+        # Clear UI and state last
         self.username = None
         self.clear_window()
         self.create_login_widgets()
@@ -425,10 +450,12 @@ class ChatClient:
         if message['status'] == StatusCode.SUCCESS.value:
             # UI is already cleared, just show success message
             messagebox.showinfo('Success', 'Logged out successfully')
+            self._logging_out = False
         else:
             error_msg = message['data'].get('message', 'Unknown error')
             messagebox.showerror('Logout Error', f'Failed to logout: {error_msg}')
             # On error, restore the chat interface
+            self._logging_out = False
             self.username = message['data'].get('username')
             if self.username:
                 self.create_chat_widgets()
@@ -534,15 +561,12 @@ class ChatClient:
         error_msg = message['data'].get('message', 'Unknown error occurred')
         logger.error(f"Received error: {error_msg}")
         
-        # Special handling for "not logged in" errors during logout
-        if "not logged in" in error_msg.lower() and not self.username:
-            # We're already logged out, so just ensure we're at login screen
-            self.clear_window()
-            self.create_login_widgets()
+        # Ignore "not logged in" errors during logout
+        if self._logging_out and "not logged in" in error_msg.lower():
             return
             
         # If we're in chat mode (chat_display exists), append to chat
-        if hasattr(self, 'chat_display'):
+        if hasattr(self, 'chat_display') and not self._logging_out:
             self.append_chat(f"Error: {error_msg}")
         else:
             # Otherwise show error dialog
@@ -550,7 +574,7 @@ class ChatClient:
 
     def listen_for_messages(self):
         """Listen for incoming messages from the server."""
-        while True:
+        while not self.stop_event.is_set():
             try:
                 message = protocol.recv_json(self.sock)
                 if not message:
@@ -563,6 +587,11 @@ class ChatClient:
                     
                 logger.debug(f"Received message: {message}")
                 
+                # If we're logging out, only process logout responses
+                if self._logging_out and message['type'] != MessageType.LOGOUT.value:
+                    logger.debug(f"Ignoring message during logout: {message['type']}")
+                    continue
+                
                 # Route message to appropriate handler
                 msg_type = message['type']
                 handler = self.message_handlers.get(msg_type)
@@ -573,8 +602,13 @@ class ChatClient:
                     logger.warning(f"No handler for message type: {msg_type}")
                     
             except Exception as e:
-                logger.error(f"Error in message listener: {e}")
+                if not self._logging_out:  # Only log error if not intentionally logging out
+                    logger.error(f"Error in message listener: {e}")
                 break
+
+    def stop_listener(self):
+        """Stop the listener thread."""
+        self.stop_event.set()
 
 if __name__ == '__main__':
     root = tk.Tk()
