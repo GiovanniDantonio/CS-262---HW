@@ -64,7 +64,6 @@ def init_db():
                     content TEXT NOT NULL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     delivered INTEGER DEFAULT 0,
-                    deleted INTEGER DEFAULT 0,
                     FOREIGN KEY (sender) REFERENCES accounts(username),
                     FOREIGN KEY (recipient) REFERENCES accounts(username)
                  )''')
@@ -243,7 +242,7 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
     
     # Get unread message count
     c.execute(
-        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND delivered = 0 AND deleted = 0",
+        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND delivered = 0",
         (username,)
     )
     unread_count = c.fetchone()[0]
@@ -409,7 +408,7 @@ def handle_get_messages(data: dict, c: sqlite3.Cursor) -> dict:
     c.execute(
         """SELECT id, sender, content, timestamp 
            FROM messages 
-           WHERE recipient = ? AND deleted = 0 
+           WHERE recipient = ? 
            ORDER BY timestamp DESC 
            LIMIT ?""",
         (username, count)
@@ -448,16 +447,19 @@ def handle_delete_messages(data: dict, c: sqlite3.Cursor) -> dict:
         # Only delete messages where the user is either sender or recipient
         placeholders = ','.join('?' * len(message_ids))
         c.execute(
-            f"""UPDATE messages 
-                SET deleted = 1 
+            f"""DELETE FROM messages 
                 WHERE id IN ({placeholders})
                 AND (sender = ? OR recipient = ?)""",
             (*message_ids, username, username)
         )
         
+        deleted_count = c.rowcount
+        if deleted_count > 0:
+            logger.info(f"Permanently deleted {deleted_count} messages")
+        
         return protocol.create_message(
             MessageType.DELETE_MESSAGES,
-            {"deleted_count": c.rowcount},
+            {"deleted_count": deleted_count},
             StatusCode.SUCCESS
         )
     except Exception as e:
