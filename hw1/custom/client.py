@@ -68,7 +68,7 @@ class ChatClient:
             MessageType.MARK_AS_READ.value: self.handle_mark_as_read_response
         }
         
-        # Create and connect the socket once
+        # Create initial connection
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((SERVER_HOST, SERVER_PORT))
@@ -161,8 +161,8 @@ class ChatClient:
         self.chat_display.column('sender', width=100)
         self.chat_display.column('content', width=300)
         
-        # Configure unread message tag (dark background, for example)
-        self.chat_display.tag_configure('unread', background='#013f4f', foreground='white')
+        # Configure unread message tag with light yellow background
+        self.chat_display.tag_configure('unread', background='#013f4f')
         
         # Bind click event to mark messages as read
         self.chat_display.bind('<ButtonRelease-1>', self.on_message_click)
@@ -182,7 +182,6 @@ class ChatClient:
             height=4
         )
         self.system_display.pack(fill='x', pady=(5, 0))
-        self.system_display.config(state='disabled')
         
         # Message input area
         input_frame = ttk.Frame(self.chat_frame)
@@ -225,8 +224,7 @@ class ChatClient:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
 
-        # Before deletion, let's confirm with the user or check unread count, etc.
-        # In your code you’re doing an extra “get all messages first” – that’s fine:
+        # Get messages first to check unread count
         message = protocol.create_message_custom(
             MessageType.GET_MESSAGES,
             {
@@ -244,9 +242,8 @@ class ChatClient:
         """Handle get messages response specifically for account deletion."""
         self._checking_messages_for_deletion = False
         
-        # Count unread messages (server might track 'delivered' or 'read')
-        # For demonstration, we'll check if 'read' is 0
-        unread_count = sum(1 for msg in messages if msg.get('read') == 0)
+        # Count unread messages
+        unread_count = sum(1 for msg in messages if not msg.get('delivered', False))
         
         # Show warning with unread message count
         warning_msg = "Are you sure you want to delete your account?"
@@ -262,6 +259,56 @@ class ChatClient:
             )
             protocol.send_custom(self.sock, message)
 
+    def handle_get_messages_response(self, message: dict):
+        """Handle get messages response."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            messages = message['data']['messages']
+            
+            # If we're checking messages for deletion, handle that separately
+            if hasattr(self, '_checking_messages_for_deletion') and self._checking_messages_for_deletion:
+                self.handle_get_messages_response_for_deletion(messages)
+                return
+            
+            # Clear existing messages
+            for item in self.chat_display.get_children():
+                self.chat_display.delete(item)
+            
+            if messages:
+                # Display messages in reverse order (newest last)
+                for msg in reversed(messages):
+                    msg_id = msg.get('id', '')
+                    timestamp = msg.get('timestamp', '')
+                    sender = msg.get('sender', 'unknown')
+                    content = msg.get('content', '')
+                    read = msg.get('read', 0)  # Default to unread if not specified
+                    
+                    # Insert into treeview with message ID as item ID
+                    item_id = self.chat_display.insert('', 'end', iid=str(msg_id),
+                                          values=(timestamp, sender, content))
+                    
+                    # Only apply unread tag if message is unread
+                    if not read:
+                        self.chat_display.item(item_id, tags=('unread',))
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Get Messages Error', f'Failed to get messages: {error_msg}')
+
+    def handle_delete_account_response(self, message: dict):
+        """Handle server response to account deletion."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            # Stop auto-refresh
+            self.stop_auto_refresh()
+            
+            # Clear UI and reset state
+            self.username = None
+            self.clear_window()
+            self.create_login_widgets()
+            
+            messagebox.showinfo('Success', 'Account deleted successfully')
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Delete Account Error', f'Failed to delete account: {error_msg}')
+
     def clear_window(self):
         """Clear all widgets from the window."""
         for widget in self.master.winfo_children():
@@ -275,7 +322,27 @@ class ChatClient:
         if not username or not password:
             messagebox.showwarning('Input Error', 'Username and password required.')
             return
-
+        
+        # Create new socket connection if needed
+        if not self.sock or self._logging_out:
+            try:
+                # Reset logout state
+                self._logging_out = False
+                
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect((SERVER_HOST, SERVER_PORT))
+                logger.info("Reconnected to server successfully")
+                
+                # Restart listener thread
+                self.stop_event.clear()
+                self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+                self.listener_thread.start()
+                
+            except Exception as e:
+                logger.error(f"Could not connect to server: {e}")
+                messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
+                return
+            
         logger.debug(f"Attempting to register user: {username}")
         message = protocol.create_message_custom(
             MessageType.CREATE_ACCOUNT,
@@ -296,22 +363,25 @@ class ChatClient:
             messagebox.showwarning('Input Error', 'Username and password required.')
             return
         
-        # If socket is closed (e.g. after logout), reopen it
-        if not self.sock:
-            try:
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.connect((SERVER_HOST, SERVER_PORT))
-                logger.info("Reconnected to server for login")
-                
-                # Restart listener thread
-                self.stop_event.clear()
-                self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
-                self.listener_thread.start()
-            except Exception as e:
-                logger.error(f"Could not connect to server: {e}")
-                messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
-                return
-        
+        # Create new socket connection
+        try:
+            # Reset logout state
+            self._logging_out = False
+            
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((SERVER_HOST, SERVER_PORT))
+            logger.info("Reconnected to server successfully")
+            
+            # Restart listener thread
+            self.stop_event.clear()
+            self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+            self.listener_thread.start()
+            
+        except Exception as e:
+            logger.error(f"Could not connect to server: {e}")
+            messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
+            return
+            
         logger.debug(f"Attempting to login user: {username}")
         message = protocol.create_message_custom(
             MessageType.LOGIN,
@@ -339,10 +409,6 @@ class ChatClient:
 
     def send_message(self):
         """Send a message to another user."""
-        if not self.username:
-            messagebox.showwarning('Not logged in', 'You must be logged in to send messages.')
-            return
-        
         recipient = self.recipient_entry.get().strip()
         content = self.message_entry.get().strip()
         
@@ -364,8 +430,6 @@ class ChatClient:
 
     def get_messages(self, count: int = 10):
         """Request recent messages."""
-        if not self.username:
-            return
         logger.debug("Requesting messages")
         message = protocol.create_message_custom(
             MessageType.GET_MESSAGES,
@@ -407,14 +471,15 @@ class ChatClient:
         protocol.send_custom(self.sock, message)
 
     def start_auto_refresh(self):
-        """Start automatic refresh of messages and users as a fallback."""
+        """Start automatic refresh of messages and users as backup."""
         self._refresh_after_id = None  # Store the after ID
         
         def refresh():
             if self.username:  # Only refresh if logged in
                 self.get_messages(int(self.message_limit.get()))
                 self.list_accounts()
-                self._refresh_after_id = self.master.after(5000, refresh)
+                self._refresh_after_id = self.master.after(5000, refresh)  # Store the ID
+            # Don't schedule next refresh if logged out
         refresh()
 
     def stop_auto_refresh(self):
@@ -425,16 +490,15 @@ class ChatClient:
 
     def append_chat(self, text: str):
         """Append text to system message display."""
-        if hasattr(self, 'system_display') and self.system_display.winfo_exists():
+        if hasattr(self, 'system_display') and not self.system_display.winfo_exists():
             self.system_display.config(state='normal')
             self.system_display.insert(tk.END, f"{datetime.now().strftime('%H:%M:%S')} - {text}\n")
             self.system_display.see(tk.END)
             self.system_display.config(state='disabled')
+        else:
+          return
 
-    # ---------------------------------------------------------------------
-    # Inbound Message Handlers
-    # ---------------------------------------------------------------------
-
+    # Message Handlers
     def handle_create_account_response(self, message: dict):
         """Handle create account response."""
         if message['status'] == StatusCode.SUCCESS.value:
@@ -449,30 +513,45 @@ class ChatClient:
             unread_count = message['data'].get('unread_count', 0)
             logger.debug(f"Login successful. Unread count for {self.username}: {unread_count}")
             
+            # Create the main chat widgets
             self.create_chat_widgets()
             self.master.after(500, lambda: messagebox.showinfo(
-                "Unread Messages",
-                f"You have {unread_count} unread message(s)."
+            "Unread Messages",
+            f"You have {unread_count} unread message(s)."
             ))
+            # Initial data load happens in start_auto_refresh
         else:
             messagebox.showerror('Login Error', message['data'].get('message', 'Login failed'))
     
+    def handle_logout_response(self, message: dict):
+        """Handle server response to the logout request."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            # UI is already cleared, just show success message
+            messagebox.showinfo('Success', 'Logged out successfully')
+            self._logging_out = False
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Logout Error', f'Failed to logout: {error_msg}')
+            # On error, restore the chat interface
+            self._logging_out = False
+            self.username = message['data'].get('username')
+            if self.username:
+                self.create_chat_widgets()
+                self.start_auto_refresh()
+
+
     def handle_list_accounts_response(self, message: dict):
         """Handle account list response."""
         if message['status'] == StatusCode.SUCCESS.value:
             self.user_listbox.delete(0, tk.END)
             for account in message['data']['accounts']:
                 self.user_listbox.insert(tk.END, account['username'])
-        else:
-            # On error, just show a message
-            error_msg = message['data'].get('message', 'Unknown error')
-            self.append_chat(f"Error listing accounts: {error_msg}")
 
     def handle_send_message_response(self, message: dict):
         """Handle send message response."""
         if message['status'] == StatusCode.SUCCESS.value:
             self.message_entry.delete(0, tk.END)  # Clear message input
-            # Typically no need to refresh, the server might broadcast
+            # No need to refresh as we'll get a broadcast
         else:
             error_msg = message['data'].get('message', 'Unknown error')
             self.append_chat(f"Error sending message: {error_msg}")
@@ -492,16 +571,19 @@ class ChatClient:
                 self.chat_display.delete(item)
             
             if messages:
-                # Show oldest first, so reverse the reversed list
+                # Display messages in reverse order (newest last)
                 for msg in reversed(messages):
                     msg_id = msg.get('id', '')
                     timestamp = msg.get('timestamp', '')
                     sender = msg.get('sender', 'unknown')
                     content = msg.get('content', '')
-                    read = msg.get('read', 0)
+                    read = msg.get('read', 0)  # Default to unread if not specified
                     
+                    # Insert into treeview with message ID as item ID
                     item_id = self.chat_display.insert('', 'end', iid=str(msg_id),
-                                                       values=(timestamp, sender, content))
+                                          values=(timestamp, sender, content))
+                    
+                    # Only apply unread tag if message is unread
                     if not read:
                         self.chat_display.item(item_id, tags=('unread',))
         else:
@@ -522,57 +604,48 @@ class ChatClient:
     def handle_delete_account_response(self, message: dict):
         """Handle server response to account deletion."""
         if message['status'] == StatusCode.SUCCESS.value:
+            # Stop auto-refresh
             self.stop_auto_refresh()
+            
+            # Clear UI and reset state
             self.username = None
             self.clear_window()
             self.create_login_widgets()
+            
             messagebox.showinfo('Success', 'Account deleted successfully')
         else:
             error_msg = message['data'].get('message', 'Unknown error')
             messagebox.showerror('Delete Account Error', f'Failed to delete account: {error_msg}')
 
-    def handle_logout_response(self, message: dict):
-        """Handle server response to the logout request."""
-        if message['status'] == StatusCode.SUCCESS.value:
-            messagebox.showinfo('Success', 'Logged out successfully')
-            self._logging_out = False
-        else:
-            error_msg = message['data'].get('message', 'Unknown error')
-            messagebox.showerror('Logout Error', f'Failed to logout: {error_msg}')
-            # If logout failed, restore the chat interface
-            self._logging_out = False
-            if self.username:
-                self.create_chat_widgets()
-                self.start_auto_refresh()
-
     def handle_broadcast_message(self, message: dict):
         """Handle broadcast messages from server."""
         if not hasattr(self, 'chat_display'):
-            return  # Ignore if not in chat mode
+            return  # Ignore broadcasts if not in chat mode
             
         broadcast_type = message['data'].get('type')
         if broadcast_type == 'users':
+            # Update online users list
             users = message['data'].get('users', [])
             self.user_listbox.delete(0, tk.END)
             for user in users:
-                if user != self.username:  # Skip current user
+                if user != self.username:  # Don't show current user
                     self.user_listbox.insert(tk.END, user)
+                    
         elif broadcast_type == 'messages':
-            # Append or refresh the message list
+            # Update messages
             messages = message['data'].get('messages', [])
             for msg in messages:
-                msg_id = str(msg.get('id', ''))
-                # Only insert if not already in the tree
-                if not self.chat_display.exists(msg_id):
-                    timestamp = msg.get('timestamp', '')
-                    sender = msg.get('sender', 'unknown')
-                    content = msg.get('content', '')
-                    self.chat_display.insert('', 'end', iid=msg_id,
-                                             values=(timestamp, sender, content))
-                # If you want to handle read/unread status, you'd do it here
+                msg_id = msg.get('id', '')
+                timestamp = msg.get('timestamp', '')
+                sender = msg.get('sender', 'unknown')
+                content = msg.get('content', '')
+                
+                # Insert into treeview with message ID as item ID
+                self.chat_display.insert('', 'end', iid=str(msg_id),
+                                      values=(timestamp, sender, content))
 
     def handle_error_response(self, message: dict):
-        """Handle error response from the server."""
+        """Handle error response."""
         error_msg = message['data'].get('message', 'Unknown error occurred')
         logger.error(f"Received error: {error_msg}")
         
@@ -580,32 +653,30 @@ class ChatClient:
         if self._logging_out and "not logged in" in error_msg.lower():
             return
             
-        # If we're in chat mode, show it in the system display
+        # If we're in chat mode (chat_display exists), append to chat
         if hasattr(self, 'chat_display') and not self._logging_out:
             self.append_chat(f"Error: {error_msg}")
         else:
+            # Otherwise show error dialog
             messagebox.showerror('Error', error_msg)
 
     def handle_mark_as_read_response(self, message: dict):
-        """Handle mark-as-read response."""
+        """Handle mark as read response."""
         if message['status'] != StatusCode.SUCCESS.value:
             error_msg = message['data'].get('message', 'Unknown error')
             logger.error(f"Failed to mark messages as read: {error_msg}")
             # Optionally refresh messages to ensure correct state
             self.get_messages()
 
-    # ---------------------------------------------------------------------
-    # Event Handlers
-    # ---------------------------------------------------------------------
-
     def on_message_click(self, event):
-        """Handle message click event to mark an unread message as read."""
+        """Handle message click event."""
         item = self.chat_display.identify_row(event.y)
         if item and self.chat_display.item(item, 'tags') == ('unread',):
-            # Locally mark as read
-            self.chat_display.item(item, tags=())
-            # Tell server
-            msg = protocol.create_message_custom(
+            # Mark message as read locally
+            self.chat_display.item(item, tags=())  # Remove 'unread' tag
+            
+            # Send read confirmation to server
+            message = protocol.create_message_custom(
                 MessageType.MARK_AS_READ,
                 {
                     "username": self.username,
@@ -613,59 +684,63 @@ class ChatClient:
                 },
                 StatusCode.PENDING
             )
-            protocol.send_custom(self.sock, msg)
+            protocol.send_custom(self.sock, message)
 
     def listen_for_messages(self):
-        """Continuously listen for inbound messages from the server."""
+        """Listen for incoming messages from the server."""
         while not self.stop_event.is_set():
             try:
-                inbound = protocol.recv_custom(self.sock)
-                if not inbound:
-                    logger.warning("Server disconnected or empty message.")
-                    break
-                if isinstance(inbound, str):
-                    # Some error or invalid data
-                    logger.error(f"Error receiving data: {inbound}")
+                message = protocol.recv_custom(self.sock)
+                if not message:
+                    logger.warning("Received empty message from server")
+                    continue
+                    
+                if isinstance(message, str):  # Error occurred
+                    logger.error(f"Error receiving message: {message}")
+                    continue
+                    
+                logger.debug(f"Received message: {message}")
+                
+                # If we're logging out, only process logout responses
+                if self._logging_out and message['type'] != MessageType.LOGOUT.value:
+                    logger.debug(f"Ignoring message during logout: {message['type']}")
                     continue
                 
-                logger.debug(f"Received message: {inbound}")
-                
-                # If logging out, ignore everything except the logout response
-                if self._logging_out and inbound['type'] != MessageType.LOGOUT.value:
-                    logger.debug(f"Ignoring inbound message during logout: {inbound['type']}")
-                    continue
-
-                # Dispatch to handler
-                msg_type = inbound['type']
+                # Route message to appropriate handler
+                msg_type = message['type']
                 handler = self.message_handlers.get(msg_type)
+                
                 if handler:
-                    # Run handler on the main GUI thread
-                    self.master.after(0, handler, inbound)
+                    self.master.after(0, handler, message)
                 else:
                     logger.warning(f"No handler for message type: {msg_type}")
                     
             except Exception as e:
-                if not self._logging_out:
-                    logger.error(f"Error in listener thread: {e}")
+                if not self._logging_out:  # Only log error if not intentionally logging out
+                    logger.error(f"Error in message listener: {e}")
                 break
 
     def stop_listener(self):
-        """Stop the background listener thread."""
+        """Stop the listener thread."""
         self.stop_event.set()
 
     def logout(self):
-        """Send logout request and then close resources."""
+        """
+        Sends a logout request to the server for the current user.
+        The server's response is handled in handle_logout_response.
+        """
         if not self.username:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
 
+        # Set logging out state
         self._logging_out = True
         logger.debug("Starting logout process")
         
-        # Stop auto-refresh to avoid conflicts
+        # Stop auto-refresh immediately to prevent race conditions
         self.stop_auto_refresh()
         
-        # Send logout request
+        # Build and send the logout request
         logout_msg = protocol.create_message_custom(
             MessageType.LOGOUT,
             {"username": self.username},
@@ -673,14 +748,14 @@ class ChatClient:
         )
         protocol.send_custom(self.sock, logout_msg)
         
-        # Slight delay before final cleanup
+        # Give a small delay for the server to process logout
         self.master.after(100, self._complete_logout)
 
     def _complete_logout(self):
-        """Actually close the socket and reset UI."""
+        """Complete the logout process by cleaning up resources."""
         logger.debug("Completing logout process")
         
-        # Stop listener
+        # Stop listener thread first
         self.stop_listener()
         
         # Close socket
@@ -690,10 +765,7 @@ class ChatClient:
         except Exception as e:
             logger.error(f"Error closing socket: {e}")
         
-        # Nullify it so we can reconnect on next login if desired
-        self.sock = None
-
-        # Clear UI back to login
+        # Clear UI and state last
         self.username = None
         self.clear_window()
         self.create_login_widgets()

@@ -104,10 +104,14 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 def broadcast_updates():
-    """Broadcast updates to all connected clients."""
     while True:
         try:
             time.sleep(5)  # Broadcast every 5 seconds
+            
+            # Create a new connection and cursor in this thread:
+            conn_broadcast = sqlite3.connect(DB_PATH)
+            cursor_broadcast = conn_broadcast.cursor()
+            
             with threading.Lock():
                 # Get all online users
                 online_users = list(active_clients.keys())
@@ -118,23 +122,20 @@ def broadcast_updates():
                         # 1) Send user list update
                         users_msg = protocol.create_message_custom(
                             MessageType.BROADCAST,
-                            {
-                                "type": "users",
-                                "users": online_users
-                            },
+                            {"type": "users", "users": online_users},
                             StatusCode.SUCCESS
                         )
                         protocol.send_custom(conn, users_msg)
                         
-                        # 2) Send messages update
-                        cursor.execute("""
+                        # 2) Send messages update using the broadcast thread’s cursor:
+                        cursor_broadcast.execute("""
                             SELECT m.id, m.sender, m.recipient, m.content, m.timestamp
                             FROM messages m
                             WHERE m.recipient = ?
                             ORDER BY m.timestamp DESC
                             LIMIT 50
                         """, (username,))
-                        messages = cursor.fetchall()
+                        messages = cursor_broadcast.fetchall()
                         
                         messages_list = [
                             {
@@ -149,17 +150,16 @@ def broadcast_updates():
                         
                         msg_msg = protocol.create_message_custom(
                             MessageType.BROADCAST,
-                            {
-                                "type": "messages",
-                                "messages": messages_list
-                            },
+                            {"type": "messages", "messages": messages_list},
                             StatusCode.SUCCESS
                         )
                         protocol.send_custom(conn, msg_msg)
                         
                     except Exception as e:
                         logger.error(f"Error broadcasting to {username}: {e}")
-                        
+            # Close the broadcast connection after done:
+            conn_broadcast.close()
+            
         except Exception as e:
             logger.error(f"Error in broadcast thread: {e}")
 
@@ -403,7 +403,9 @@ def handle_list_accounts(data: dict, c: sqlite3.Cursor) -> bytes:
     logger.debug(f"Handling list accounts request: {data}")
     pattern = data.get('pattern', '%')
     page = data.get('page', 1)
+    page = int(page)
     per_page = data.get('per_page', 10)
+    per_page = int(per_page)
     
     offset = (page - 1) * per_page
     
@@ -685,13 +687,10 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                 # NOTE: This checks the INBOUND message's status (the client sent 'pending').
                 # If you want to track the user only if the SERVER's handler says "success",
                 # you'd need to parse the outbound response bytes or track it differently.
-                if (
-                    message['type'] == MessageType.LOGIN.value
-                    and message['status'] == StatusCode.SUCCESS.value
-                ):
-                    username = data['username']
-                    client_username = username
-                    active_clients[username] = (client_socket, time.time())
+                if message['type'] == MessageType.LOGIN.value:
+                  username = data['username']
+                  client_username = username
+                  active_clients[username] = (client_socket, time.time())
 
             except Exception as e:
                 logger.error(f"Error handling message: {e}")
