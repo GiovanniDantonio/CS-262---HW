@@ -72,7 +72,8 @@ class ChatClient:
             MessageType.DELETE_ACCOUNT.value: self.handle_delete_account_response,
             MessageType.LOGOUT.value: self.handle_logout_response,
             MessageType.BROADCAST.value: self.handle_broadcast_message,
-            MessageType.ERROR.value: self.handle_error_response
+            MessageType.ERROR.value: self.handle_error_response,
+            MessageType.MARK_AS_READ.value: self.handle_mark_as_read_response
 
         }
         
@@ -145,7 +146,7 @@ class ChatClient:
             chat_display_frame,
             columns=('timestamp', 'sender', 'content'),
             show='headings',
-            selectmode='extended'  # Allow multiple selection
+            selectmode='extended'
         )
         
         # Configure columns
@@ -157,6 +158,12 @@ class ChatClient:
         self.chat_display.column('timestamp', width=100)
         self.chat_display.column('sender', width=100)
         self.chat_display.column('content', width=300)
+        
+        # Configure unread message tag with light grey background
+        self.chat_display.tag_configure('unread', background='#023b39')  # Light grey, matching button color
+        
+        # Bind click event to mark messages as read
+        self.chat_display.bind('<ButtonRelease-1>', self.on_message_click)
         
         # Add scrollbar
         scrollbar = ttk.Scrollbar(chat_display_frame, orient=tk.VERTICAL, command=self.chat_display.yview)
@@ -208,6 +215,7 @@ class ChatClient:
 
         # Start automatic refresh
         self.start_auto_refresh()
+        
     def delete_account(self):
         """Send a request to delete the currently logged-in account."""
         if not self.username:
@@ -268,10 +276,18 @@ class ChatClient:
                     timestamp = msg.get('timestamp', '')
                     sender = msg.get('sender', 'unknown')
                     content = msg.get('content', '')
+                    read = msg.get('read', 0)  # Default to unread if not specified
                     
                     # Insert into treeview with message ID as item ID
-                    self.chat_display.insert('', 'end', iid=str(msg_id),
+                    item_id = self.chat_display.insert('', 'end', iid=str(msg_id),
                                           values=(timestamp, sender, content))
+                    
+                    # Only apply unread tag if message is unread
+                    if not read:
+                        self.chat_display.item(item_id, tags=('unread',))
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Get Messages Error', f'Failed to get messages: {error_msg}')
 
     def handle_delete_account_response(self, message: dict):
         """Handle server response to account deletion."""
@@ -557,10 +573,18 @@ class ChatClient:
                     timestamp = msg.get('timestamp', '')
                     sender = msg.get('sender', 'unknown')
                     content = msg.get('content', '')
+                    read = msg.get('read', 0)  # Default to unread if not specified
                     
                     # Insert into treeview with message ID as item ID
-                    self.chat_display.insert('', 'end', iid=str(msg_id),
+                    item_id = self.chat_display.insert('', 'end', iid=str(msg_id),
                                           values=(timestamp, sender, content))
+                    
+                    # Only apply unread tag if message is unread
+                    if not read:
+                        self.chat_display.item(item_id, tags=('unread',))
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Get Messages Error', f'Failed to get messages: {error_msg}')
 
     def handle_delete_messages_response(self, message: dict):
         """Handle delete messages response."""
@@ -631,6 +655,31 @@ class ChatClient:
         else:
             # Otherwise show error dialog
             messagebox.showerror('Error', error_msg)
+
+    def handle_mark_as_read_response(self, message: dict):
+        """Handle mark as read response."""
+        if message['status'] != StatusCode.SUCCESS.value:
+            error_msg = message['data'].get('message', 'Unknown error')
+            logger.error(f"Failed to mark messages as read: {error_msg}")
+            # Optionally refresh messages to ensure correct state
+            self.get_messages()
+
+    def on_message_click(self, event):
+        """Handle message click event."""
+        item = self.chat_display.identify_row(event.y)
+        if item and self.chat_display.item(item, 'tags') == ('unread',):
+            # Mark message as read locally
+            self.chat_display.item(item, tags=())  # Remove 'unread' tag
+            
+            # Send read confirmation to server
+            message = protocol.create_message(
+                MessageType.MARK_AS_READ,
+                {
+                    "username": self.username,
+                    "message_ids": [int(item)]
+                }
+            )
+            protocol.send_json(self.sock, message)
 
     def listen_for_messages(self):
         """Listen for incoming messages from the server."""

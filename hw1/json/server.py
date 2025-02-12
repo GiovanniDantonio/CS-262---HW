@@ -64,6 +64,7 @@ def init_db():
                     content TEXT NOT NULL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     delivered INTEGER DEFAULT 0,
+                    read INTEGER DEFAULT NULL,
                     FOREIGN KEY (sender) REFERENCES accounts(username),
                     FOREIGN KEY (recipient) REFERENCES accounts(username)
                  )''')
@@ -71,6 +72,29 @@ def init_db():
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
+        raise
+    finally:
+        conn.close()
+
+def migrate_database():
+    """Migrate database to latest schema."""
+    logger.info("Checking database schema...")
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Check if read column exists in messages table
+        c.execute("PRAGMA table_info(messages)")
+        columns = [col[1] for col in c.fetchall()]
+        
+        if 'read' not in columns:
+            logger.info("Adding 'read' column to messages table...")
+            c.execute("ALTER TABLE messages ADD COLUMN read INTEGER DEFAULT NULL")
+            conn.commit()
+            logger.info("Database migration completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Database migration failed: {e}")
         raise
     finally:
         conn.close()
@@ -276,7 +300,6 @@ def handle_logout(data: dict, c: sqlite3.Cursor) -> dict:
     else:
         return protocol.create_error("User not currently logged in or not found in active list.")
 
-
 def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle account deletion request."""
     logger.debug(f"Handling delete account request: {data}")
@@ -325,7 +348,6 @@ def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
         logger.error(f"Failed to delete account for {username}: {e}")
         return protocol.create_error("Failed to delete account.")
 
-
 def handle_list_accounts(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle account listing request."""
     logger.debug(f"Handling list accounts request: {data}")
@@ -363,86 +385,101 @@ def handle_list_accounts(data: dict, c: sqlite3.Cursor) -> dict:
 def handle_send_message(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle message sending request."""
     logger.debug(f"Handling send message request: {data}")
-    sender = data.get('username')  
+    username = data.get('username')
     recipient = data.get('recipient')
     content = data.get('content')
     
-    if not all([sender, recipient, content]):
-        return protocol.create_error("Username, recipient, and content required")
+    if not all([username, recipient, content]):
+        return protocol.create_error("Username, recipient, and content are required")
     
-    # Verify both users exist
-    c.execute("SELECT username FROM accounts WHERE username IN (?, ?)", (sender, recipient))
-
-    users = c.fetchall()
-    found_usernames = [u[0] for u in users]
-    print("HERE ARE THE USERS:")
-    print(users)
-    if sender == recipient:
-    # Sending to yourself
-        if len(found_usernames) != 1 or found_usernames[0] != sender:
-            return protocol.create_error("Invalid sender or recipient (self-send failed).")
-    else:
-        if len(found_usernames) != 2:
-            return protocol.create_error("Invalid sender or recipient (two-user case).")
+    # Check if recipient exists
+    c.execute("SELECT username FROM accounts WHERE username = ?", (recipient,))
+    if not c.fetchone():
+        return protocol.create_error("Recipient not found")
     
     try:
+        # Insert message with read status as NULL (unread)
         c.execute(
-            """INSERT INTO messages (sender, recipient, content, timestamp) 
+            """INSERT INTO messages (sender, recipient, content, delivered) 
                VALUES (?, ?, ?, ?)""",
-            (sender, recipient, content, datetime.utcnow().isoformat())
+            (username, recipient, content, 0)
         )
+        message_id = c.lastrowid
+        
+        # Verify message was inserted
+        c.execute("SELECT timestamp, read FROM messages WHERE id = ?", (message_id,))
+        result = c.fetchone()
+        if not result:
+            raise Exception("Message insertion failed - no message ID returned")
+        
+        timestamp, read_status = result
+        
+        # Commit the transaction
         c.connection.commit()
         
         # Broadcast updates to both sender and recipient
-        broadcast_to_user(sender)
-        broadcast_to_user(recipient)
+        try:
+            broadcast_to_user(username)  # Sender sees their sent message
+            broadcast_to_user(recipient)  # Recipient gets notification
+        except Exception as e:
+            logger.error(f"Failed to broadcast message: {e}")
+            # Don't return error since message was saved successfully
         
         return protocol.create_message(
             MessageType.SEND_MESSAGE,
-            {"message": "Message sent successfully"},
+            {
+                "id": message_id,
+                "timestamp": timestamp,
+                "read": read_status
+            },
             StatusCode.SUCCESS
         )
     except Exception as e:
-        logger.error(f"Failed to send message: {e}")
-        return protocol.create_error("Failed to send message")
+        logger.error(f"Failed to send message. Error: {str(e)}")
+        return protocol.create_error(f"Failed to send message: {str(e)}")
 
 def handle_get_messages(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle message retrieval request."""
     logger.debug(f"Handling get messages request: {data}")
     username = data.get('username')
-    count = data.get('count', 10)
+    count = data.get('count', 10)  # Default to 10 messages
     
     if not username:
         return protocol.create_error("Username required")
     
-    c.execute(
-        """SELECT id, sender, content, timestamp 
-           FROM messages 
-           WHERE recipient = ? 
-           ORDER BY timestamp DESC 
-           LIMIT ?""",
-        (username, count)
-    )
-    
-    messages = [{
-        "id": row[0],
-        "sender": row[1],
-        "content": row[2],
-        "timestamp": row[3]
-    } for row in c.fetchall()]
-    
-    # Mark messages as delivered
-    if messages:
+    try:
+        # Get messages where user is recipient
         c.execute(
-            "UPDATE messages SET delivered = 1 WHERE recipient = ? AND delivered = 0",
-            (username,)
+            """SELECT id, sender, content, timestamp,
+                      CASE 
+                          WHEN read IS NULL THEN 0
+                          ELSE read 
+                      END as read_status
+               FROM messages 
+               WHERE recipient = ? 
+               ORDER BY timestamp DESC 
+               LIMIT ?""",
+            (username, count)
         )
-    
-    return protocol.create_message(
-        MessageType.GET_MESSAGES,
-        {"messages": messages},
-        StatusCode.SUCCESS
-    )
+        
+        messages = []
+        for row in c.fetchall():
+            messages.append({
+                'id': row[0],
+                'sender': row[1],
+                'content': row[2],
+                'timestamp': row[3],
+                'read': row[4]  # This will be 0 for NULL (unread) or 1 for read
+            })
+        
+        return protocol.create_message(
+            MessageType.GET_MESSAGES,
+            {"messages": messages},
+            StatusCode.SUCCESS
+        )
+    except Exception as e:
+        logger.error(f"Failed to get messages. Error: {str(e)}")
+        return protocol.create_error(f"Failed to get messages: {str(e)}")
 
 def handle_delete_messages(data: dict, c: sqlite3.Cursor) -> dict:
     """Handle message deletion request."""
@@ -476,6 +513,38 @@ def handle_delete_messages(data: dict, c: sqlite3.Cursor) -> dict:
         logger.error(f"Failed to delete messages: {e}")
         return protocol.create_error("Failed to delete messages")
 
+def handle_mark_as_read(data: dict, c: sqlite3.Cursor) -> dict:
+    """Handle marking messages as read."""
+    logger.debug(f"Handling mark as read request: {data}")
+    username = data.get('username')
+    message_ids = data.get('message_ids', [])
+    
+    if not username or not message_ids:
+        return protocol.create_error("Username and message IDs required")
+    
+    try:
+        # Only mark messages as read if user is the recipient
+        placeholders = ','.join('?' * len(message_ids))
+        c.execute(
+            f"""UPDATE messages 
+                SET read = 1 
+                WHERE id IN ({placeholders})
+                AND recipient = ?""",
+            (*message_ids, username)
+        )
+        
+        # Commit the changes
+        c.connection.commit()
+        
+        return protocol.create_message(
+            MessageType.MARK_AS_READ,
+            {"marked_count": c.rowcount},
+            StatusCode.SUCCESS
+        )
+    except Exception as e:
+        logger.error(f"Failed to mark messages as read: {e}")
+        return protocol.create_error("Failed to mark messages as read")
+
 def handle_client(client_socket: socket.socket, addr: tuple):
     """Handle client connection and route messages to appropriate handlers."""
     logger.info(f"New client connected: {addr}")
@@ -506,7 +575,8 @@ def handle_client(client_socket: socket.socket, addr: tuple):
                     MessageType.GET_MESSAGES: handle_get_messages,
                     MessageType.DELETE_MESSAGES: handle_delete_messages,
                     MessageType.DELETE_ACCOUNT: handle_delete_account,
-                    MessageType.LOGOUT: handle_logout
+                    MessageType.LOGOUT: handle_logout,
+                    MessageType.MARK_AS_READ: handle_mark_as_read
                 }
                 
                 handler = handler_map.get(msg_type)
@@ -549,6 +619,7 @@ def start_server():
     db_conn = sqlite3.connect(DB_PATH)
     cursor = db_conn.cursor()
     init_db()
+    migrate_database()
     
     # Create server socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
