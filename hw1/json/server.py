@@ -291,6 +291,13 @@ def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
     if not record:
         return protocol.create_error("User not found.")
 
+    # Get unread message count
+    c.execute(
+        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND delivered = 0",
+        (username,)
+    )
+    unread_count = c.fetchone()[0]
+
     try:
         c.execute(
             "DELETE FROM messages WHERE sender = ? OR recipient = ?",
@@ -308,7 +315,10 @@ def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
         
         return protocol.create_message(
             MessageType.DELETE_ACCOUNT,
-            {"username": username},
+            {
+                "username": username,
+                "unread_count": unread_count
+            },
             StatusCode.SUCCESS
         )
     except Exception as e:

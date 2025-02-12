@@ -211,25 +211,83 @@ class ChatClient:
     def delete_account(self):
         """Send a request to delete the currently logged-in account."""
         if not self.username:
-            messagebox.showwarning("No User", "You are not logged in with any account.")
+            messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
 
-        confirm = messagebox.askyesno(
-            "Confirm Account Deletion",
-            f"Are you sure you want to delete account '{self.username}'?\n"
-            "All messages (read or unread) will be permanently removed!"
-        )
-        if not confirm:
-            return
-
-        logger.debug(f"Sending delete account request for user: {self.username}")
+        # Get messages first to check unread count
         message = protocol.create_message(
-            MessageType.DELETE_ACCOUNT,
+            MessageType.GET_MESSAGES,
             {
-                "username": self.username
+                "username": self.username,
+                "count": 1000  # Get all messages to check unread status
             }
         )
         protocol.send_json(self.sock, message)
+        
+        # The response will be handled by handle_get_messages_response_for_deletion
+        self._checking_messages_for_deletion = True
+
+    def handle_get_messages_response_for_deletion(self, messages):
+        """Handle get messages response specifically for account deletion."""
+        self._checking_messages_for_deletion = False
+        
+        # Count unread messages
+        unread_count = sum(1 for msg in messages if not msg.get('delivered', False))
+        
+        # Show warning with unread message count
+        warning_msg = "Are you sure you want to delete your account?"
+        if unread_count > 0:
+            warning_msg += f"\n\nWARNING: You have {unread_count} unread message(s) that will be permanently deleted!"
+        
+        if messagebox.askyesno('Confirm Account Deletion', warning_msg):
+            # Send delete account request
+            message = protocol.create_message(
+                MessageType.DELETE_ACCOUNT,
+                {"username": self.username}
+            )
+            protocol.send_json(self.sock, message)
+
+    def handle_get_messages_response(self, message: dict):
+        """Handle get messages response."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            messages = message['data']['messages']
+            
+            # If we're checking messages for deletion, handle that separately
+            if hasattr(self, '_checking_messages_for_deletion') and self._checking_messages_for_deletion:
+                self.handle_get_messages_response_for_deletion(messages)
+                return
+            
+            # Clear existing messages
+            for item in self.chat_display.get_children():
+                self.chat_display.delete(item)
+            
+            if messages:
+                # Display messages in reverse order (newest last)
+                for msg in reversed(messages):
+                    msg_id = msg.get('id', '')
+                    timestamp = msg.get('timestamp', '')
+                    sender = msg.get('sender', 'unknown')
+                    content = msg.get('content', '')
+                    
+                    # Insert into treeview with message ID as item ID
+                    self.chat_display.insert('', 'end', iid=str(msg_id),
+                                          values=(timestamp, sender, content))
+
+    def handle_delete_account_response(self, message: dict):
+        """Handle server response to account deletion."""
+        if message['status'] == StatusCode.SUCCESS.value:
+            # Stop auto-refresh
+            self.stop_auto_refresh()
+            
+            # Clear UI and reset state
+            self.username = None
+            self.clear_window()
+            self.create_login_widgets()
+            
+            messagebox.showinfo('Success', 'Account deleted successfully')
+        else:
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Delete Account Error', f'Failed to delete account: {error_msg}')
 
     def clear_window(self):
         """Clear all widgets from the window."""
@@ -483,6 +541,11 @@ class ChatClient:
         if message['status'] == StatusCode.SUCCESS.value:
             messages = message['data']['messages']
             
+            # If we're checking messages for deletion, handle that separately
+            if hasattr(self, '_checking_messages_for_deletion') and self._checking_messages_for_deletion:
+                self.handle_get_messages_response_for_deletion(messages)
+                return
+            
             # Clear existing messages
             for item in self.chat_display.get_children():
                 self.chat_display.delete(item)
@@ -498,10 +561,6 @@ class ChatClient:
                     # Insert into treeview with message ID as item ID
                     self.chat_display.insert('', 'end', iid=str(msg_id),
                                           values=(timestamp, sender, content))
-            
-            # Scroll to bottom
-            if self.chat_display.get_children():
-                self.chat_display.see(self.chat_display.get_children()[-1])
 
     def handle_delete_messages_response(self, message: dict):
         """Handle delete messages response."""
@@ -517,17 +576,18 @@ class ChatClient:
     def handle_delete_account_response(self, message: dict):
         """Handle server response to account deletion."""
         if message['status'] == StatusCode.SUCCESS.value:
-            deleted_user = message['data'].get('username', 'Unknown')
-            messagebox.showinfo("Account Deleted", f"Account '{deleted_user}' has been deleted.")
+            # Stop auto-refresh
+            self.stop_auto_refresh()
             
-            # Log the client out locally and close the window
-            self.sock.close()
-            self.master.destroy()
+            # Clear UI and reset state
+            self.username = None
+            self.clear_window()
+            self.create_login_widgets()
+            
+            messagebox.showinfo('Success', 'Account deleted successfully')
         else:
-            # Show the error message from the server
-            error_msg = message['data'].get('message', 'Unknown error occurred')
-            messagebox.showerror('Delete Account Error', error_msg)
-
+            error_msg = message['data'].get('message', 'Unknown error')
+            messagebox.showerror('Delete Account Error', f'Failed to delete account: {error_msg}')
 
     def handle_broadcast_message(self, message: dict):
         """Handle broadcast messages from server."""
