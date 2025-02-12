@@ -225,13 +225,12 @@ class ChatClient:
             return
 
         # Get messages first to check unread count
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.GET_MESSAGES,
             {
                 "username": self.username,
                 "count": 1000  # Get all messages to check unread status
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
         
@@ -252,10 +251,9 @@ class ChatClient:
         
         if messagebox.askyesno('Confirm Account Deletion', warning_msg):
             # Send delete account request
-            message = protocol.create_message_custom(
+            message = protocol.create_message(
                 MessageType.DELETE_ACCOUNT,
-                {"username": self.username},
-                StatusCode.PENDING
+                {"username": self.username}
             )
             protocol.send_custom(self.sock, message)
 
@@ -344,13 +342,12 @@ class ChatClient:
                 return
             
         logger.debug(f"Attempting to register user: {username}")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.CREATE_ACCOUNT,
             {
                 "username": username,
                 "password": hash_password(password)
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
@@ -383,27 +380,25 @@ class ChatClient:
             return
             
         logger.debug(f"Attempting to login user: {username}")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.LOGIN,
             {
                 "username": username,
                 "password": hash_password(password)
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
     def list_accounts(self, pattern: str = '%'):
         """Request list of accounts matching pattern."""
         logger.debug(f"Requesting account list with pattern: {pattern}")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.LIST_ACCOUNTS,
             {
                 "pattern": pattern,
                 "page": 1,
                 "per_page": 50
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
@@ -417,27 +412,25 @@ class ChatClient:
             return
             
         logger.debug(f"Sending message to {recipient}")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.SEND_MESSAGE,
             {
                 "username": self.username,
                 "recipient": recipient,
                 "content": content
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
     def get_messages(self, count: int = 10):
         """Request recent messages."""
         logger.debug("Requesting messages")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.GET_MESSAGES,
             {
                 "username": self.username,
                 "count": count
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
@@ -460,13 +453,12 @@ class ChatClient:
             return
             
         logger.debug(f"Deleting messages: {selected_ids}")
-        message = protocol.create_message_custom(
+        message = protocol.create_message(
             MessageType.DELETE_MESSAGES,
             {
                 "username": self.username,
                 "message_ids": selected_ids
-            },
-            StatusCode.PENDING
+            }
         )
         protocol.send_custom(self.sock, message)
 
@@ -676,13 +668,12 @@ class ChatClient:
             self.chat_display.item(item, tags=())  # Remove 'unread' tag
             
             # Send read confirmation to server
-            message = protocol.create_message_custom(
+            message = protocol.create_message(
                 MessageType.MARK_AS_READ,
                 {
                     "username": self.username,
                     "message_ids": [int(item)]
-                },
-                StatusCode.PENDING
+                }
             )
             protocol.send_custom(self.sock, message)
 
@@ -741,10 +732,9 @@ class ChatClient:
         self.stop_auto_refresh()
         
         # Build and send the logout request
-        logout_msg = protocol.create_message_custom(
+        logout_msg = protocol.create_message(
             MessageType.LOGOUT,
-            {"username": self.username},
-            StatusCode.PENDING
+            {"username": self.username}
         )
         protocol.send_custom(self.sock, logout_msg)
         
