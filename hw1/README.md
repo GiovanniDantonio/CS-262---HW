@@ -21,6 +21,7 @@
    python3 client.py
 
 
+## Running the Script
 
-
+python3 benchmark_serialization.py
 
