@@ -437,10 +437,10 @@ class ChatClient:
             
             # Create the main chat widgets
             self.create_chat_widgets()
-            messagebox.showinfo(
-                "Unread Messages",
-                f"You have {unread_count} unread message(s)."
-            )
+            self.master.after(500, lambda: messagebox.showinfo(
+            "Unread Messages",
+            f"You have {unread_count} unread message(s)."
+            ))
             # Initial data load happens in start_auto_refresh
         else:
             messagebox.showerror('Login Error', message['data'].get('message', 'Login failed'))
