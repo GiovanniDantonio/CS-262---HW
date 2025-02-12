@@ -46,20 +46,12 @@ class ChatClient:
         self.master.title('Chat Client - Login')
         self.master.geometry('600x800')
         
-        # Initialize socket
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            self.sock.connect((SERVER_HOST, SERVER_PORT))
-            logger.info("Connected to server successfully")
-        except Exception as e:
-            logger.error(f"Could not connect to server: {e}")
-            messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
-            self.master.destroy()
-            return
-            
+        # Initialize socket and state
+        self.sock = None
         self.username = None
         self._logging_out = False  # Track logout state
-        self.create_login_widgets()
+        self.stop_event = threading.Event()
+        self.listener_thread = None
         
         # Message handlers for different message types
         self.message_handlers = {
@@ -74,16 +66,26 @@ class ChatClient:
             MessageType.BROADCAST.value: self.handle_broadcast_message,
             MessageType.ERROR.value: self.handle_error_response,
             MessageType.MARK_AS_READ.value: self.handle_mark_as_read_response
-
         }
         
-        # Create stop event for listener thread
-        self.stop_event = threading.Event()
-
-        # Start listener thread
-        self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
-        self.listener_thread.start()
-
+        # Create initial connection
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((SERVER_HOST, SERVER_PORT))
+            logger.info("Connected to server successfully")
+            
+            # Start listener thread
+            self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+            self.listener_thread.start()
+            
+        except Exception as e:
+            logger.error(f"Could not connect to server: {e}")
+            messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
+            self.master.destroy()
+            return
+        
+        self.create_login_widgets()
+        
     def create_login_widgets(self):
         """Create the login interface."""
         self.clear_window()
@@ -159,8 +161,8 @@ class ChatClient:
         self.chat_display.column('sender', width=100)
         self.chat_display.column('content', width=300)
         
-        # Configure unread message tag with light grey background
-        self.chat_display.tag_configure('unread', background='#023b39')  # Light grey, matching button color
+        # Configure unread message tag with light yellow background
+        self.chat_display.tag_configure('unread', background='#013f4f')
         
         # Bind click event to mark messages as read
         self.chat_display.bind('<ButtonRelease-1>', self.on_message_click)
@@ -318,6 +320,26 @@ class ChatClient:
         if not username or not password:
             messagebox.showwarning('Input Error', 'Username and password required.')
             return
+        
+        # Create new socket connection if needed
+        if not self.sock or self._logging_out:
+            try:
+                # Reset logout state
+                self._logging_out = False
+                
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect((SERVER_HOST, SERVER_PORT))
+                logger.info("Reconnected to server successfully")
+                
+                # Restart listener thread
+                self.stop_event.clear()
+                self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+                self.listener_thread.start()
+                
+            except Exception as e:
+                logger.error(f"Could not connect to server: {e}")
+                messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
+                return
             
         logger.debug(f"Attempting to register user: {username}")
         message = protocol.create_message(
@@ -337,6 +359,25 @@ class ChatClient:
         if not username or not password:
             messagebox.showwarning('Input Error', 'Username and password required.')
             return
+        
+        # Create new socket connection
+        try:
+            # Reset logout state
+            self._logging_out = False
+            
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((SERVER_HOST, SERVER_PORT))
+            logger.info("Reconnected to server successfully")
+            
+            # Restart listener thread
+            self.stop_event.clear()
+            self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)
+            self.listener_thread.start()
+            
+        except Exception as e:
+            logger.error(f"Could not connect to server: {e}")
+            messagebox.showerror('Connection Error', f'Could not connect to server: {e}')
+            return
             
         logger.debug(f"Attempting to login user: {username}")
         message = protocol.create_message(
@@ -347,51 +388,6 @@ class ChatClient:
             }
         )
         protocol.send_json(self.sock, message)
-
-    def logout(self):
-        """
-        Sends a logout request to the server for the current user.
-        The server's response is handled in handle_logout_response.
-        """
-        if not self.username:
-            messagebox.showinfo("No user logged in", "You are not currently logged in.")
-            return
-
-        # Set logging out state
-        self._logging_out = True
-        logger.debug("Starting logout process")
-        
-        # Stop auto-refresh immediately to prevent race conditions
-        self.stop_auto_refresh()
-        
-        # Build and send the logout request
-        logout_msg = protocol.create_message(
-            MessageType.LOGOUT,
-            {"username": self.username}
-        )
-        protocol.send_json(self.sock, logout_msg)
-        
-        # Give a small delay for the server to process logout
-        self.master.after(100, self._complete_logout)
-
-    def _complete_logout(self):
-        """Complete the logout process by cleaning up resources."""
-        logger.debug("Completing logout process")
-        
-        # Stop listener thread first
-        self.stop_listener()
-        
-        # Close socket
-        try:
-            self.sock.close()
-            logger.info("Socket closed successfully")
-        except Exception as e:
-            logger.error(f"Error closing socket: {e}")
-        
-        # Clear UI and state last
-        self.username = None
-        self.clear_window()
-        self.create_login_widgets()
 
     def list_accounts(self, pattern: str = '%'):
         """Request list of accounts matching pattern."""
@@ -718,6 +714,51 @@ class ChatClient:
     def stop_listener(self):
         """Stop the listener thread."""
         self.stop_event.set()
+
+    def logout(self):
+        """
+        Sends a logout request to the server for the current user.
+        The server's response is handled in handle_logout_response.
+        """
+        if not self.username:
+            messagebox.showinfo("No user logged in", "You are not currently logged in.")
+            return
+
+        # Set logging out state
+        self._logging_out = True
+        logger.debug("Starting logout process")
+        
+        # Stop auto-refresh immediately to prevent race conditions
+        self.stop_auto_refresh()
+        
+        # Build and send the logout request
+        logout_msg = protocol.create_message(
+            MessageType.LOGOUT,
+            {"username": self.username}
+        )
+        protocol.send_json(self.sock, logout_msg)
+        
+        # Give a small delay for the server to process logout
+        self.master.after(100, self._complete_logout)
+
+    def _complete_logout(self):
+        """Complete the logout process by cleaning up resources."""
+        logger.debug("Completing logout process")
+        
+        # Stop listener thread first
+        self.stop_listener()
+        
+        # Close socket
+        try:
+            self.sock.close()
+            logger.info("Socket closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing socket: {e}")
+        
+        # Clear UI and state last
+        self.username = None
+        self.clear_window()
+        self.create_login_widgets()
 
 if __name__ == '__main__':
     root = tk.Tk()
