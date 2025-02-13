@@ -86,7 +86,7 @@ print("  Custom size: ", len(custom_serialized), "characters")
 # -------------------------------------------------
 # Benchmark Serialization Performance
 # -------------------------------------------------
-iterations = 1000000
+iterations = 100
 
 json_serialize_time = timeit.timeit(
     lambda: json_serialize(sample_message), 
