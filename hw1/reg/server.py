@@ -57,14 +57,14 @@ def init_db():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP
                  )''')
+        # unread is 0, read is 1
         c.execute('''CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     sender TEXT NOT NULL,
                     recipient TEXT NOT NULL,
                     content TEXT NOT NULL,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    delivered INTEGER DEFAULT 0,
-                    read INTEGER DEFAULT NULL,
+                    read INTEGER DEFAULT 0,
                     FOREIGN KEY (sender) REFERENCES accounts(username),
                     FOREIGN KEY (recipient) REFERENCES accounts(username)
                  )''')
@@ -89,7 +89,7 @@ def migrate_database():
         
         if 'read' not in columns:
             logger.info("Adding 'read' column to messages table...")
-            c.execute("ALTER TABLE messages ADD COLUMN read INTEGER DEFAULT NULL")
+            c.execute("ALTER TABLE messages ADD COLUMN read INTEGER DEFAULT 0")
             conn.commit()
             logger.info("Database migration completed successfully")
         
@@ -266,7 +266,7 @@ def handle_login(data: dict, c: sqlite3.Cursor) -> dict:
     
     # Get unread message count
     c.execute(
-        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND delivered = 0",
+        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0",
         (username,)
     )
     unread_count = c.fetchone()[0]
@@ -316,7 +316,7 @@ def handle_delete_account(data: dict, c: sqlite3.Cursor) -> dict:
 
     # Get unread message count
     c.execute(
-        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND delivered = 0",
+        "SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0",
         (username,)
     )
     unread_count = c.fetchone()[0]
@@ -400,7 +400,7 @@ def handle_send_message(data: dict, c: sqlite3.Cursor) -> dict:
     try:
         # Insert message with read status as NULL (unread)
         c.execute(
-            """INSERT INTO messages (sender, recipient, content, delivered) 
+            """INSERT INTO messages (sender, recipient, content, read) 
                VALUES (?, ?, ?, ?)""",
             (username, recipient, content, 0)
         )
@@ -451,9 +451,9 @@ def handle_get_messages(data: dict, c: sqlite3.Cursor) -> dict:
         # Get messages where user is recipient
         c.execute(
             """SELECT id, sender, content, timestamp,
-                      CASE 
-                          WHEN read IS NULL THEN 0
-                          ELSE read 
+                      CASE
+                          WHEN read IS 0 THEN 0
+                          ELSE read
                       END as read_status
                FROM messages 
                WHERE recipient = ? 

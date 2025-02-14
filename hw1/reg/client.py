@@ -242,7 +242,7 @@ class ChatClient:
         self._checking_messages_for_deletion = False
         
         # Count unread messages
-        unread_count = sum(1 for msg in messages if not msg.get('delivered', False))
+        unread_count = sum(1 for msg in messages if msg.get('read') == 0)
         
         # Show warning with unread message count
         warning_msg = "Are you sure you want to delete your account?"
