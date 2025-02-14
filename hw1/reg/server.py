@@ -17,14 +17,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat_server")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load Configuration File from the same directory as server.py
+CONFIG_FILE = os.path.join(BASE_DIR, "server_config.json")
+
 # Load in Configuration File
-CONFIG_FILE = "server_config.json"
+# CONFIG_FILE = "server_config.json"
 default_config = {
     "host": "0.0.0.0",
     "port": 12345,
     "db_path": "chat.db"
 }
-
 if os.path.isfile(CONFIG_FILE):
     with open(CONFIG_FILE, "r") as f:
         user_config = json.load(f)
