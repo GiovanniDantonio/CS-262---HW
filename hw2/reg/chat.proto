@@ -2,48 +2,51 @@ syntax = "proto3";
 
 package chat;
 
-// User authentication and account management
+// Service definition for the Chat application.
 service ChatService {
+    // User authentication and account management.
     rpc Register(UserCredentials) returns (Response);
     rpc Login(UserCredentials) returns (LoginResponse);
     rpc Logout(UserRequest) returns (Response);
     rpc DeleteAccount(UserRequest) returns (Response);
+    rpc ListAccounts(AccountListRequest) returns (AccountListResponse);
 
-    // Messaging
+    // Messaging.
     rpc SendMessage(Message) returns (Response);
     rpc GetMessages(MessageRequest) returns (MessageList);
     rpc DeleteMessages(DeleteMessagesRequest) returns (Response);
     rpc MarkAsRead(MarkAsReadRequest) returns (Response);
 
-    // Real-time message streaming
+    // Real-time message streaming.
+    // This RPC streams messages to the client automatically.
     rpc StreamMessages(UserRequest) returns (stream Message);
 }
 
-// User credentials for login/register
+// Messages for user authentication.
 message UserCredentials {
     string username = 1;
     string password = 2;
 }
 
-// General user request
+// A simple user request containing a username.
 message UserRequest {
     string username = 1;
 }
 
-// Generic response
+// A generic response message.
 message Response {
     bool success = 1;
     string message = 2;
 }
 
-// Login response with unread messages count
+// Login response message with an unread message count.
 message LoginResponse {
     bool success = 1;
     string message = 2;
     int32 unread_count = 3;
 }
 
-// Message structure
+// Structure for a chat message.
 message Message {
     int32 id = 1;
     string sender = 2;
@@ -53,25 +56,46 @@ message Message {
     bool read = 6;
 }
 
-// Request for fetching messages
+// Request for fetching a list of messages.
 message MessageRequest {
     string username = 1;
     int32 count = 2;
 }
 
-// List of messages
+// Response containing a list of messages.
 message MessageList {
     repeated Message messages = 1;
 }
 
-// Delete messages request
+// Request for deleting messages.
 message DeleteMessagesRequest {
     string username = 1;
     repeated int32 message_ids = 2;
 }
 
-// Mark messages as read request
+// Request for marking messages as read.
 message MarkAsReadRequest {
     string username = 1;
     repeated int32 message_ids = 2;
+}
+
+// Request for listing accounts.
+message AccountListRequest {
+    string pattern = 1;
+    int32 page = 2;
+    int32 per_page = 3;
+}
+
+// Account representation.
+message Account {
+    string username = 1;
+    string created_at = 2;
+    string last_login = 3;
+}
+
+// Response containing a list of accounts.
+message AccountListResponse {
+    repeated Account accounts = 1;
+    int32 page = 2;
+    int32 per_page = 3;
 }
