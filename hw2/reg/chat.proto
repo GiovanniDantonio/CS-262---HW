@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package chat;
+
+// User authentication and account management
+service ChatService {
+    rpc Register(UserCredentials) returns (Response);
+    rpc Login(UserCredentials) returns (LoginResponse);
+    rpc Logout(UserRequest) returns (Response);
+    rpc DeleteAccount(UserRequest) returns (Response);
+
+    // Messaging
+    rpc SendMessage(Message) returns (Response);
+    rpc GetMessages(MessageRequest) returns (MessageList);
+    rpc DeleteMessages(DeleteMessagesRequest) returns (Response);
+    rpc MarkAsRead(MarkAsReadRequest) returns (Response);
+
+    // Real-time message streaming
+    rpc StreamMessages(UserRequest) returns (stream Message);
+}
+
+// User credentials for login/register
+message UserCredentials {
+    string username = 1;
+    string password = 2;
+}
+
+// General user request
+message UserRequest {
+    string username = 1;
+}
+
+// Generic response
+message Response {
+    bool success = 1;
+    string message = 2;
+}
+
+// Login response with unread messages count
+message LoginResponse {
+    bool success = 1;
+    string message = 2;
+    int32 unread_count = 3;
+}
+
+// Message structure
+message Message {
+    int32 id = 1;
+    string sender = 2;
+    string recipient = 3;
+    string content = 4;
+    string timestamp = 5;
+    bool read = 6;
+}
+
+// Request for fetching messages
+message MessageRequest {
+    string username = 1;
+    int32 count = 2;
+}
+
+// List of messages
+message MessageList {
+    repeated Message messages = 1;
+}
+
+// Delete messages request
+message DeleteMessagesRequest {
+    string username = 1;
+    repeated int32 message_ids = 2;
+}
+
+// Mark messages as read request
+message MarkAsReadRequest {
+    string username = 1;
+    repeated int32 message_ids = 2;
+}
