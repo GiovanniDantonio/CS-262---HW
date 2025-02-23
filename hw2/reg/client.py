@@ -83,7 +83,7 @@ class ChatClient:
         chat_display_frame.pack(fill="both", expand=True, pady=(0,10))
         self.chat_display = ttk.Treeview(chat_display_frame, 
                                          columns=("timestamp", "sender", "content"), 
-                                         show="headings", selectmode="browse")
+                                         show="headings", selectmode="extended")
         self.chat_display.heading("timestamp", text="Time")
         self.chat_display.heading("sender", text="From")
         self.chat_display.heading("content", text="Message")
@@ -220,7 +220,35 @@ class ChatClient:
             messagebox.showerror("Error", str(e))
 
     def delete_selected_messages(self):
-        messagebox.showinfo("Info", "Delete Selected functionality not implemented in this gRPC version.")
+        selected_items = self.chat_display.selection()
+        if not selected_items:
+            messagebox.showwarning("No Selection", "Please select messages to delete.")
+            return
+            
+        try:
+            # Convert selected item IDs to integers
+            message_ids = [int(item) for item in selected_items]
+            
+            # Call DeleteMessages RPC
+            response = self.stub.DeleteMessages(chat_pb2.DeleteMessagesRequest(
+                username=self.username,
+                message_ids=message_ids
+            ))
+            
+            if response.success:
+                # Remove deleted messages from display
+                for item in selected_items:
+                    self.chat_display.delete(item)
+                messagebox.showinfo("Success", "Messages deleted successfully")
+            else:
+                messagebox.showerror("Error", response.message)
+                
+        except grpc.RpcError as e:
+            logger.error(f"gRPC error during delete_messages: {e}")
+            messagebox.showerror("Error", str(e))
+        except ValueError as e:
+            logger.error(f"Error converting message IDs: {e}")
+            messagebox.showerror("Error", "Invalid message IDs")
 
     def delete_account(self):
         if not self.username:
