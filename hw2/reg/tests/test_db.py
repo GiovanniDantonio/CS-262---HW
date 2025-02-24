@@ -3,7 +3,6 @@ import sys
 import os
 import sqlite3
 import tempfile
-from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,7 +17,7 @@ class TestDatabase(unittest.TestCase):
         # Enable foreign key constraints
         self.cursor.execute("PRAGMA foreign_keys = ON")
         
-        # Create necessary tables
+        # Create tables matching the server schema
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS accounts (
                 username TEXT PRIMARY KEY,
@@ -35,8 +34,7 @@ class TestDatabase(unittest.TestCase):
                 recipient TEXT NOT NULL,
                 content TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                delivered INTEGER DEFAULT 0,
-                read INTEGER DEFAULT NULL,
+                read INTEGER DEFAULT 0,
                 FOREIGN KEY (sender) REFERENCES accounts(username),
                 FOREIGN KEY (recipient) REFERENCES accounts(username)
             )
@@ -74,16 +72,16 @@ class TestDatabase(unittest.TestCase):
         self.cursor.execute("INSERT INTO accounts (username, password) VALUES (?, ?)", ("recipient", "pass2"))
         self.conn.commit()
         
-        # Send message
+        # Send message (using the server's schema without a "delivered" column)
         self.cursor.execute("""
-            INSERT INTO messages (sender, recipient, content, delivered)
-            VALUES (?, ?, ?, ?)
-        """, ("sender", "recipient", "Hello!", 0))
+            INSERT INTO messages (sender, recipient, content)
+            VALUES (?, ?, ?)
+        """, ("sender", "recipient", "Hello!"))
         self.conn.commit()
         
-        # Verify message exists
+        # Verify message exists with default read status 0
         self.cursor.execute("""
-            SELECT sender, recipient, content, delivered, read
+            SELECT sender, recipient, content, read
             FROM messages
             WHERE sender = ? AND recipient = ?
         """, ("sender", "recipient"))
@@ -93,12 +91,11 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(result[0], "sender")
         self.assertEqual(result[1], "recipient")
         self.assertEqual(result[2], "Hello!")
-        self.assertEqual(result[3], 0)  # delivered
-        self.assertIsNone(result[4])    # read status
+        self.assertEqual(result[3], 0)  # read should default to 0
 
     def test_foreign_key_constraint(self):
         """Test that messages can't be created with non-existent users"""
-        # Try to create message with non-existent users
+        # Attempt to create a message using usernames that don't exist in accounts.
         with self.assertRaises(sqlite3.IntegrityError):
             self.cursor.execute("""
                 INSERT INTO messages (sender, recipient, content)

@@ -1,142 +1,129 @@
 import unittest
 import sys
 import os
-import socket
-import threading
 import tkinter as tk
 from unittest.mock import MagicMock, patch
 import json
-import queue
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Adjust the path so we can import the client module.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from client import ChatClient, hash_password
-from protocol import MessageType, StatusCode, create_message
+from protocol import MessageType
 
 class TestChatClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        """Set up test fixtures that can be shared across all tests"""
+        """Set up a Tk root window (hidden) for the tests."""
         cls.root = tk.Tk()
-        cls.root.withdraw()  # Hide the window
+        cls.root.withdraw()  # Hide the main window
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up shared test fixtures"""
         cls.root.destroy()
 
     def setUp(self):
-        """Set up test environment before each test"""
-        # Create socket patcher
-        self.socket_patcher = patch('socket.socket')
-        self.mock_socket = self.socket_patcher.start()
+        """
+        Create a ChatClient instance and override its gRPC stub with a MagicMock.
+        Also, patch the UI elements so that we can simulate user input.
+        """
+        self.client = ChatClient(self.root)
+        # Override the gRPC stub with a MagicMock to simulate responses.
+        self.client.stub = MagicMock()
         
-        # Mock socket connection and file-like object
-        self.mock_socket.return_value.connect = MagicMock()
-        self.mock_socket.return_value.send = MagicMock()
-        self.mock_socket.return_value.makefile.return_value.readline.return_value = ""
-        
-        # Create client instance
-        with patch('tkinter.Entry') as mock_entry:
-            # Create mock Entry instances
-            mock_username_entry = MagicMock()
-            mock_password_entry = MagicMock()
-            
-            # Configure mock Entry instances
-            mock_entry.side_effect = [mock_username_entry, mock_password_entry]
-            
-            # Create client
-            self.client = ChatClient(self.root)
-            
-            # Store mock entries for later use
-            self.client.username_entry = mock_username_entry
-            self.client.password_entry = mock_password_entry
+        # For login, the username and password entries are created in create_login_widgets().
+        self.client.username_entry.get = MagicMock()
+        self.client.password_entry.get = MagicMock()
+        # For sending messages, ensure chat widget entries exist.
+        self.client.recipient_entry = MagicMock()
+        self.client.recipient_entry.get = MagicMock()
+        self.client.message_entry = MagicMock()
+        self.client.message_entry.get = MagicMock()
+        # Also stub out the delete method for the message_entry.
+        self.client.message_entry.delete = MagicMock()
 
     def tearDown(self):
-        """Clean up after each test"""
-        if self.client and hasattr(self.client, 'sock'):
-            self.client.sock.close()
-        self.socket_patcher.stop()
+        pass
 
     def test_client_connection(self):
-        """Test that client connects to server on initialization"""
-        # Verify socket connection was attempted
-        self.mock_socket.return_value.connect.assert_called_once()
-        
-        # Verify initial state
+        """
+        Test that the ChatClient initializes correctly:
+        - No user is logged in.
+        - The gRPC channel and stub are set up.
+        """
         self.assertIsNone(self.client.username)
-        self.assertFalse(self.client._logging_out)
-        self.assertIsNotNone(self.client.listener_thread)
+        self.assertIsNotNone(self.client.channel)
+        self.assertIsNotNone(self.client.stub)
 
-    @patch('client.protocol.send_json')
-    @patch('socket.socket')
-    @patch('client.hash_password')
-    def test_login_request(self, mock_hash_password, mock_socket_class, mock_send_json):
-        """Test login request creation and sending"""
+    @patch('tkinter.messagebox.showinfo')
+    @patch('tkinter.messagebox.showerror')
+    def test_login_request(self, mock_showerror, mock_showinfo):
+        """
+        Test that the login method calls the stub.Login method with the correct
+        credentials and, upon a successful response, sets the username and shows an info message.
+        """
         username = "testuser"
         password = "testpass"
-        hashed_password = "hashedpass123"  # Mock hashed password
-        
-        # Mock hash_password
-        mock_hash_password.return_value = hashed_password
-        
-        # Mock socket instance
-        mock_socket = MagicMock()
-        mock_socket_class.return_value = mock_socket
-        mock_socket.makefile.return_value.readline.return_value = ""
-        
-        # Mock entry values
         self.client.username_entry.get.return_value = username
         self.client.password_entry.get.return_value = password
-        
+
+        # Create a fake login response from the stub.
+        fake_response = MagicMock()
+        fake_response.success = True
+        fake_response.message = "Login successful."
+        fake_response.unread_count = 3
+        self.client.stub.Login.return_value = fake_response
+
         # Call login
         self.client.login()
-        
-        # Verify send_json was called
-        mock_send_json.assert_called()
-        
-        # Get the sent message
-        _, sent_message = mock_send_json.call_args[0]
-        
-        # Verify message format
-        self.assertEqual(sent_message["type"], MessageType.LOGIN.value)
-        self.assertEqual(sent_message["data"]["username"], username)
-        self.assertEqual(sent_message["data"]["password"], hashed_password)
-        
-        # Verify hash_password was called with correct password
-        mock_hash_password.assert_called_once_with(password)
+
+        # Verify that stub.Login was called exactly once with a UserCredentials object
+        self.client.stub.Login.assert_called_once()
+        args, _ = self.client.stub.Login.call_args
+        credentials = args[0]
+        self.assertEqual(credentials.username, username)
+        self.assertEqual(credentials.password, hash_password(password))
+
+        # Upon successful login, the username should be set and a success message shown.
+        self.assertEqual(self.client.username, username)
+        mock_showinfo.assert_called_with("Success", f"Login successful! You have {fake_response.unread_count} unread messages.")
+        # Ensure showerror was not called.
+        mock_showerror.assert_not_called()
 
     def test_send_chat_message(self):
-        """Test sending a chat message"""
-        # Set up client as logged in
-        self.client.username = "sender"
-        
-        # Create test message
+        """
+        Test that the send_message method calls stub.SendMessage with the correct message,
+        and, on a successful send, clears the message entry.
+        """
+        sender = "sender"
         recipient = "recipient"
         content = "Hello, world!"
         
-        # Create and send message
-        message = create_message(
-            MessageType.SEND_MESSAGE,
-            {
-                "username": self.client.username,
-                "recipient": recipient,
-                "content": content
-            }
-        )
+        # Set the client as logged in.
+        self.client.username = sender
         
-        # Send the message
-        self.client.sock.send(json.dumps(message).encode('utf-8') + b'\n')
-        
-        # Verify send was called with correct data
-        self.mock_socket.return_value.send.assert_called_once()
-        sent_data = self.mock_socket.return_value.send.call_args[0][0]
-        sent_message = json.loads(sent_data.decode('utf-8').strip())
-        
-        # Verify message format
-        self.assertEqual(sent_message["type"], MessageType.SEND_MESSAGE.value)
-        self.assertEqual(sent_message["data"]["username"], "sender")
-        self.assertEqual(sent_message["data"]["recipient"], recipient)
-        self.assertEqual(sent_message["data"]["content"], content)
+        # Set up the chat message fields.
+        self.client.recipient_entry.get.return_value = recipient
+        self.client.message_entry.get.return_value = content
+
+        # Create a fake successful response for SendMessage.
+        fake_response = MagicMock()
+        fake_response.success = True
+        fake_response.message = "Message sent successfully."
+        self.client.stub.SendMessage.return_value = fake_response
+
+        # Call send_message.
+        self.client.send_message()
+
+        # Verify that stub.SendMessage was called once.
+        self.client.stub.SendMessage.assert_called_once()
+        args, _ = self.client.stub.SendMessage.call_args
+        message = args[0]
+        self.assertEqual(message.sender, sender)
+        self.assertEqual(message.recipient, recipient)
+        self.assertEqual(message.content, content)
+
+        # After a successful send, the message entry should be cleared.
+        self.client.message_entry.delete.assert_called_once_with(0, tk.END)
 
 if __name__ == '__main__':
     unittest.main()
