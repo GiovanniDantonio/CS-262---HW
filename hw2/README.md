@@ -14,7 +14,7 @@
 
    source venv/bin/activate
    cd reg
-   
+   python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. chat.proto
    python3 server.py
    python3 client.py
 
