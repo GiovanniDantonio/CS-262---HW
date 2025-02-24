@@ -1,172 +1,152 @@
 import unittest
 import sys
 import os
-import socket
-import threading
-import json
-import sqlite3
-from unittest.mock import MagicMock, patch
 import tempfile
+import sqlite3
+import time
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import server
-from protocol import MessageType, StatusCode, create_message
+# Adjust path so that we can import the server module.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+from server import ChatService, DB_PATH  # DB_PATH will be overridden
+
+# Dummy classes to simulate gRPC request and context objects.
+class DummyRequest:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+class DummyContext:
+    def is_active(self):
+        return True
+    def cancel(self):
+        pass
 
 class TestServer(unittest.TestCase):
     def setUp(self):
-        """Set up test environment before each test"""
-        # Create a temporary database for testing
+        """Create a temporary database and override DB_PATH before instantiating ChatService."""
         self.temp_db = tempfile.NamedTemporaryFile(delete=False)
         self.db_path = self.temp_db.name
-        server.DB_PATH = self.db_path  # Set the server's DB path
-        
-        # Initialize the database
-        self.conn = sqlite3.connect(self.db_path)
-        self.cursor = self.conn.cursor()
-        
-        # Create necessary tables
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS accounts (
-                username TEXT PRIMARY KEY,
-                password TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender TEXT NOT NULL,
-                recipient TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                delivered INTEGER DEFAULT 0,
-                read INTEGER DEFAULT NULL,
-                FOREIGN KEY (sender) REFERENCES accounts(username),
-                FOREIGN KEY (recipient) REFERENCES accounts(username)
-            )
-        ''')
-        
-        self.conn.commit()
+        self.temp_db.close()  # Close so SQLite can open it
+        # Override the server's DB_PATH to point to our temporary database.
+        import server
+        server.DB_PATH = self.db_path
+        # Instantiate ChatService; its __init__ will run init_db() and migrate_database() on our temporary DB.
+        self.server = ChatService()
+        self.context = DummyContext()
 
     def tearDown(self):
-        """Clean up after each test"""
-        self.conn.close()
-        os.unlink(self.db_path)  # Delete the temporary database
+        """Clean up the temporary database file."""
+        os.unlink(self.db_path)
 
-    def test_create_account(self):
-        """Test account creation"""
-        # Test data
-        data = {
-            "username": "testuser",
-            "password": "testpass"
-        }
+    def test_register_and_login(self):
+        """Test that a user can register and then log in."""
+        # Register a new account.
+        req_register = DummyRequest(username="user1", password="password1")
+        response_reg = self.server.Register(req_register, self.context)
+        self.assertTrue(response_reg.success, msg="Registration should succeed for a new user.")
         
-        # Create account
-        result = server.handle_create_account(data, self.cursor)
-        self.conn.commit()
+        # Attempt duplicate registration.
+        response_dup = self.server.Register(req_register, self.context)
+        self.assertFalse(response_dup.success, msg="Duplicate registration should fail.")
         
-        # Verify success response
-        self.assertEqual(result["status"], StatusCode.SUCCESS.value)
+        # Test login with correct credentials.
+        req_login = DummyRequest(username="user1", password="password1")
+        login_response = self.server.Login(req_login, self.context)
+        self.assertTrue(login_response.success, msg="Login should succeed with correct credentials.")
         
-        # Verify account exists in database
-        self.cursor.execute("SELECT username FROM accounts WHERE username=?", (data["username"],))
-        account = self.cursor.fetchone()
-        self.assertIsNotNone(account)
-        self.assertEqual(account[0], data["username"])
+        # Test login with wrong password.
+        req_login_fail = DummyRequest(username="user1", password="wrongpassword")
+        login_response_fail = self.server.Login(req_login_fail, self.context)
+        self.assertFalse(login_response_fail.success, msg="Login should fail with incorrect password.")
 
-    def test_create_duplicate_account(self):
-        """Test creating account with existing username"""
-        # Create first account
-        data = {
-            "username": "testuser",
-            "password": "testpass"
-        }
-        server.handle_create_account(data, self.cursor)
-        self.conn.commit()
+    def test_send_and_get_message(self):
+        """Test sending a message from one user to another and retrieving it."""
+        # Register sender and recipient.
+        req_sender = DummyRequest(username="sender", password="pass")
+        req_recipient = DummyRequest(username="recipient", password="pass")
+        self.server.Register(req_sender, self.context)
+        self.server.Register(req_recipient, self.context)
         
-        # Try to create duplicate account
-        result = server.handle_create_account(data, self.cursor)
-        self.conn.commit()
+        # Send a message.
+        send_req = DummyRequest(sender="sender", recipient="recipient", content="Hello!")
+        send_response = self.server.SendMessage(send_req, self.context)
+        self.assertTrue(send_response.success, msg="Sending a message should succeed.")
         
-        # Verify error response
-        self.assertEqual(result["status"], StatusCode.ERROR.value)
+        # Retrieve messages for the recipient.
+        get_req = DummyRequest(username="recipient", count=10)
+        msg_list = self.server.GetMessages(get_req, self.context)
+        self.assertTrue(len(msg_list.messages) >= 1, msg="At least one message should be returned.")
+        
+        # Verify the content of the retrieved message.
+        message = msg_list.messages[0]
+        self.assertEqual(message.content, "Hello!")
+        self.assertEqual(message.sender, "sender")
+        self.assertEqual(message.recipient, "recipient")
 
-    def test_login(self):
-        """Test login with valid credentials"""
-        # Create account first
-        data = {
-            "username": "testuser",
-            "password": "testpass"
-        }
-        server.handle_create_account(data, self.cursor)
-        self.conn.commit()
+    def test_delete_account(self):
+        """Test account deletion along with associated messages."""
+        # Register a user and a sender.
+        req_user = DummyRequest(username="deleteme", password="pass")
+        req_sender = DummyRequest(username="sender", password="pass")
+        self.server.Register(req_user, self.context)
+        self.server.Register(req_sender, self.context)
         
-        # Try to login
-        result = server.handle_login(data, self.cursor)
-        self.conn.commit()
+        # Send a message to the user.
+        send_req = DummyRequest(sender="sender", recipient="deleteme", content="Hi!")
+        self.server.SendMessage(send_req, self.context)
         
-        # Verify success response
-        self.assertEqual(result["status"], StatusCode.SUCCESS.value)
+        # Delete the account.
+        del_req = DummyRequest(username="deleteme")
+        del_response = self.server.DeleteAccount(del_req, self.context)
+        self.assertTrue(del_response.success, msg="Account deletion should succeed.")
+        
+        # Try to log in with the deleted account.
+        login_req = DummyRequest(username="deleteme", password="pass")
+        login_response = self.server.Login(login_req, self.context)
+        self.assertFalse(login_response.success, msg="Login should fail for a deleted account.")
 
-    def test_login_invalid_credentials(self):
-        """Test login with invalid credentials"""
-        # Create account
-        data = {
-            "username": "testuser",
-            "password": "testpass"
-        }
-        server.handle_create_account(data, self.cursor)
-        self.conn.commit()
+    def test_list_accounts(self):
+        """Test listing accounts using a search pattern."""
+        # Register several users.
+        users = [f"user{i}" for i in range(5)]
+        for user in users:
+            req = DummyRequest(username=user, password="pass")
+            self.server.Register(req, self.context)
         
-        # Try to login with wrong password
-        wrong_data = {
-            "username": "testuser",
-            "password": "wrongpass"
-        }
-        result = server.handle_login(wrong_data, self.cursor)
-        
-        # Verify error response
-        self.assertEqual(result["status"], StatusCode.ERROR.value)
+        # List accounts with a pattern.
+        list_req = DummyRequest(pattern="user%", page=1, per_page=10)
+        account_list_response = self.server.ListAccounts(list_req, self.context)
+        returned_users = [acc.username for acc in account_list_response.accounts]
+        for user in users:
+            self.assertIn(user, returned_users, msg=f"{user} should be listed.")
 
-    def test_handle_send_message(self):
-        """Test message sending"""
-        # Create sender and recipient accounts
-        server.handle_create_account({
-            "username": "sender", 
-            "password": server.hash_password("pass")
-        }, self.cursor)
-        server.handle_create_account({
-            "username": "recipient", 
-            "password": server.hash_password("pass")
-        }, self.cursor)
-        self.conn.commit()  # Commit the transaction
+    def test_mark_as_read(self):
+        """Test that marking messages as read works correctly."""
+        # Register sender and recipient.
+        req_sender = DummyRequest(username="sender", password="pass")
+        req_recipient = DummyRequest(username="recipient", password="pass")
+        self.server.Register(req_sender, self.context)
+        self.server.Register(req_recipient, self.context)
         
-        # Send a message
-        message_data = {
-            "username": "sender",
-            "recipient": "recipient",
-            "content": "Hello, world!"
-        }
+        # Send a message.
+        send_req = DummyRequest(sender="sender", recipient="recipient", content="Test Message")
+        self.server.SendMessage(send_req, self.context)
         
-        result = server.handle_send_message(message_data, self.cursor)
-        self.conn.commit()  # Commit the transaction
+        # Retrieve messages.
+        get_req = DummyRequest(username="recipient", count=10)
+        msg_list = self.server.GetMessages(get_req, self.context)
+        self.assertTrue(len(msg_list.messages) >= 1, msg="There should be at least one message.")
+        message_id = msg_list.messages[0].id
         
-        self.assertEqual(result["status"], StatusCode.SUCCESS.value)
+        # Mark the message as read.
+        mark_req = DummyRequest(username="recipient", message_ids=[message_id])
+        mark_response = self.server.MarkAsRead(mark_req, self.context)
+        self.assertTrue(mark_response.success, msg="Marking as read should succeed.")
         
-        # Verify message was stored
-        self.cursor.execute("""
-            SELECT sender, recipient, content 
-            FROM messages 
-            WHERE sender = ? AND recipient = ?
-        """, (message_data["username"], message_data["recipient"]))
-        
-        msg = self.cursor.fetchone()
-        self.assertIsNotNone(msg)
-        self.assertEqual(msg[0], message_data["username"])
-        self.assertEqual(msg[1], message_data["recipient"])
-        self.assertEqual(msg[2], message_data["content"])
+        # Retrieve messages again to confirm the read status.
+        msg_list_after = self.server.GetMessages(get_req, self.context)
+        for msg in msg_list_after.messages:
+            if msg.id == message_id:
+                self.assertTrue(msg.read, msg="Message should be marked as read.")
 
 if __name__ == '__main__':
     unittest.main()
