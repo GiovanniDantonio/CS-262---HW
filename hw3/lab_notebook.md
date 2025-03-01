@@ -22,25 +22,40 @@
 
 (Experiments will be recorded here after running the simulation)
 
-### Experiment 1 (Date: TBD)
-- Configuration:
-- Observations:
-- Analysis:
+### Experiment 1 (Date: 2025-03-01)
+- Configuration: Standard, Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_1/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_1`.
+- Analysis: TBD
 
-### Experiment 2 (Date: TBD)
-- Configuration:
-- Observations:
-- Analysis:
+### Experiment 2 (Date: 2025-03-01)
+- Configuration: Standard, Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_2/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_2`.
+- Analysis: TBD
 
-(And so on for at least 5 experiments)
+### Experiment 3 (Date: 2025-03-01)
+- Configuration: Standard, Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_3/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_3`.
+- Analysis: TBD
 
-## Additional Experiments with Modified Parameters
+### Experiment 4 (Date: 2025-03-01)
+- Configuration: Standard, Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_4/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_4`.
+- Analysis: TBD
 
-### Modified Experiment 1 (Date: TBD)
-- Modified parameters:
-- Observations:
-- Analysis:
+### Experiment 5 (Date: 2025-03-01)
+- Configuration: Standard, Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_5/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_5`.
+- Analysis: TBD
 
-## Conclusions
+### Modified Experiment 1 (Date: 2025-03-01)
+- Modified parameters: Lower clock variation
+- Configuration: clock_rate = random.randint(3, 6), Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/modified_experiment_1/analysis.txt` and plots in `experiment_results_20250301_133753/modified_experiment_1`.
+- Analysis: TBD
 
-(Final conclusions will be added after all experiments are complete)
+### Modified Experiment 2 (Date: 2025-03-01)
+- Modified parameters: Higher send probability
+- Configuration: event = random.randint(1, 5), Duration: 60 seconds
+- Observations: Check analysis in `experiment_results_20250301_133753/modified_experiment_2/analysis.txt` and plots in `experiment_results_20250301_133753/modified_experiment_2`.
+- Analysis: TBD
+

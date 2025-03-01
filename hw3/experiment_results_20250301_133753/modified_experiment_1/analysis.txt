@@ -1,0 +1,1 @@
+No log files found in logs directory. Run the simulation first.

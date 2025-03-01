@@ -5,6 +5,7 @@ import random
 import queue
 import logging
 import datetime
+import os
 from typing import List, Dict, Tuple, Optional
 
 class VirtualMachine:
@@ -52,7 +53,7 @@ class VirtualMachine:
 
     def setup_logging(self):
         """Set up logging for this virtual machine."""
-        log_filename = f"machine_{self.machine_id}.log"
+        log_filename = os.path.join("logs", f"machine_{self.machine_id}.log")
         
         # Configure file handler
         file_handler = logging.FileHandler(log_filename, mode='w')
@@ -256,28 +257,42 @@ class VirtualMachine:
         self.logger.info("Starting main event loop")
         self.logger.info(f"Clock rate: {self.clock_rate} ticks/second")
         
-        while self.running:
-            # Process one event
-            self.process_event()
-            
-            # Sleep for one clock cycle
-            time.sleep(self.tick_interval)
-            
+        try:
+            while self.running:
+                # Process one event
+                self.process_event()
+                
+                # Sleep for one clock cycle
+                time.sleep(self.tick_interval)
+        except Exception as e:
+            self.logger.error(f"Error in main loop: {e}")
+        finally:
+            self.logger.info("Main loop terminated")
+
     def stop(self):
         """
         Stop the virtual machine's execution.
         """
+        self.logger.info("Stopping virtual machine")
         self.running = False
         
         # Close all connections
-        for port, conn in self.peer_connections.items():
+        for port, conn in list(self.peer_connections.items()):
             try:
                 conn.close()
-            except:
-                pass
+                self.logger.info(f"Closed connection to port {port}")
+            except Exception as e:
+                self.logger.error(f"Error closing connection to port {port}: {e}")
+                
+        # Clear connections
+        self.peer_connections.clear()
                 
         # Close server socket
         if self.server_socket:
-            self.server_socket.close()
+            try:
+                self.server_socket.close()
+                self.logger.info("Closed server socket")
+            except Exception as e:
+                self.logger.error(f"Error closing server socket: {e}")
             
         self.logger.info("Virtual machine stopped")

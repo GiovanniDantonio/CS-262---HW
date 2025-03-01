@@ -35,6 +35,9 @@ def run_experiment(name, duration, output_dir, modified_code=None):
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
+    # Make sure logs directory exists
+    os.makedirs("logs", exist_ok=True)
+    
     # Modify code if necessary
     backup_file = None
     if modified_code:
@@ -73,11 +76,21 @@ def run_experiment(name, duration, output_dir, modified_code=None):
         os.dup2(old_stdout, 1)
     
     # Move log files and plots to output directory
+    if os.path.exists("logs"):
+        for file in os.listdir("logs"):
+            if file.startswith('machine_') and file.endswith('.log'):
+                shutil.copy(os.path.join("logs", file), os.path.join(output_dir, file))
+                
+    # Move any plots that were generated            
     for file in os.listdir('.'):
-        if file.startswith('machine_') and file.endswith('.log'):
+        if file.endswith('.png'):
             shutil.move(file, os.path.join(output_dir, file))
-        elif file.endswith('.png'):
-            shutil.move(file, os.path.join(output_dir, file))
+    
+    # Clean up logs directory for next experiment
+    if os.path.exists("logs"):
+        for file in os.listdir("logs"):
+            if file.startswith('machine_') and file.endswith('.log'):
+                os.remove(os.path.join("logs", file))
     
     # Restore original code if modified
     if backup_file:

@@ -13,8 +13,14 @@ def run_virtual_machine(machine_id, port, peer_ports):
         port: Port for this machine to listen on
         peer_ports: Ports of peer machines
     """
-    vm = VirtualMachine(machine_id, port, peer_ports)
-    vm.run()
+    try:
+        vm = VirtualMachine(machine_id, port, peer_ports)
+        vm.run()
+    except KeyboardInterrupt:
+        print(f"VM {machine_id} interrupted")
+    finally:
+        if 'vm' in locals():
+            vm.stop()
 
 def main():
     """
@@ -46,27 +52,31 @@ def main():
         )
         processes.append(process)
     
-    # Start all processes
-    print(f"Starting {len(processes)} virtual machines...")
-    for p in processes:
-        p.start()
-        # Small delay to ensure machines start in order
-        time.sleep(0.5)
-    
-    # Run for specified duration
-    print(f"Running simulation for {args.duration} seconds...")
-    time.sleep(args.duration)
-    
-    # Terminate all processes
-    print("Terminating virtual machines...")
-    for p in processes:
-        p.terminate()
-    
-    # Wait for all processes to terminate
-    for p in processes:
-        p.join()
-    
-    print("Simulation complete. Check the log files for results.")
+    try:
+        # Start all processes
+        print(f"Starting {len(processes)} virtual machines...")
+        for p in processes:
+            p.start()
+            # Small delay to ensure machines start in order
+            time.sleep(0.5)
+        
+        # Run for specified duration
+        print(f"Running simulation for {args.duration} seconds...")
+        time.sleep(args.duration)
+    except KeyboardInterrupt:
+        print("Simulation interrupted by user")
+    finally:
+        # Terminate all processes
+        print("Terminating virtual machines...")
+        for p in processes:
+            if p.is_alive():
+                p.terminate()
+        
+        # Wait for all processes to terminate
+        for p in processes:
+            p.join()
+        
+        print("Simulation complete. Check the log files in logs/ directory for results.")
 
 if __name__ == "__main__":
     main()

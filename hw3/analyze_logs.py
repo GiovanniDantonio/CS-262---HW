@@ -16,6 +16,8 @@ def parse_log_file(filename: str) -> pd.DataFrame:
     Returns:
         DataFrame with parsed log data
     """
+    print(f"Parsing log file: {filename}")
+    
     # Regular expressions for parsing different log entry types
     init_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (Virtual Machine|Clock Rate|Listening on port|Peer ports|Network initialization completed|Starting main event loop)'
     receive_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - RECEIVE - System Time: (.*?), Logical Clock: (\d+), Queue Length: (\d+), From: Machine (\d+)'
@@ -25,57 +27,67 @@ def parse_log_file(filename: str) -> pd.DataFrame:
     # Data to collect
     data = []
     
-    with open(filename, 'r') as f:
-        for line in f:
-            # Try to match each pattern
-            receive_match = re.match(receive_pattern, line)
-            send_match = re.match(send_pattern, line)
-            internal_match = re.match(internal_pattern, line)
-            
-            if receive_match:
-                log_time, system_time, logical_clock, queue_length, sender_id = receive_match.groups()
-                data.append({
-                    'log_time': log_time,
-                    'system_time': system_time,
-                    'event_type': 'RECEIVE',
-                    'logical_clock': int(logical_clock),
-                    'queue_length': int(queue_length),
-                    'peer_id': int(sender_id),
-                    'target_port': None
-                })
-            elif send_match:
-                log_time, system_time, logical_clock, target_port = send_match.groups()
-                data.append({
-                    'log_time': log_time,
-                    'system_time': system_time,
-                    'event_type': 'SEND',
-                    'logical_clock': int(logical_clock),
-                    'queue_length': None,
-                    'peer_id': None,
-                    'target_port': int(target_port)
-                })
-            elif internal_match:
-                log_time, system_time, logical_clock = internal_match.groups()
-                data.append({
-                    'log_time': log_time,
-                    'system_time': system_time,
-                    'event_type': 'INTERNAL',
-                    'logical_clock': int(logical_clock),
-                    'queue_length': None,
-                    'peer_id': None,
-                    'target_port': None
-                })
+    try:
+        with open(filename, 'r') as f:
+            for line in f:
+                # Try to match each pattern
+                receive_match = re.match(receive_pattern, line)
+                send_match = re.match(send_pattern, line)
+                internal_match = re.match(internal_pattern, line)
+                
+                if receive_match:
+                    log_time, system_time, logical_clock, queue_length, sender_id = receive_match.groups()
+                    data.append({
+                        'log_time': log_time,
+                        'system_time': system_time,
+                        'event_type': 'RECEIVE',
+                        'logical_clock': int(logical_clock),
+                        'queue_length': int(queue_length),
+                        'peer_id': int(sender_id),
+                        'target_port': None
+                    })
+                elif send_match:
+                    log_time, system_time, logical_clock, target_port = send_match.groups()
+                    data.append({
+                        'log_time': log_time,
+                        'system_time': system_time,
+                        'event_type': 'SEND',
+                        'logical_clock': int(logical_clock),
+                        'queue_length': None,
+                        'peer_id': None,
+                        'target_port': int(target_port)
+                    })
+                elif internal_match:
+                    log_time, system_time, logical_clock = internal_match.groups()
+                    data.append({
+                        'log_time': log_time,
+                        'system_time': system_time,
+                        'event_type': 'INTERNAL',
+                        'logical_clock': int(logical_clock),
+                        'queue_length': None,
+                        'peer_id': None,
+                        'target_port': None
+                    })
+    except Exception as e:
+        print(f"Error parsing log file {filename}: {e}")
+        return pd.DataFrame(columns=['log_time', 'system_time', 'event_type', 
+                                    'logical_clock', 'queue_length', 'peer_id', 
+                                    'target_port'])
     
     # Convert to DataFrame
     if data:
         df = pd.DataFrame(data)
         
         # Convert timestamp strings to datetime objects
-        df['log_time'] = pd.to_datetime(df['log_time'])
-        df['system_time'] = pd.to_datetime(df['system_time'])
+        try:
+            df['log_time'] = pd.to_datetime(df['log_time'])
+            df['system_time'] = pd.to_datetime(df['system_time'])
+        except Exception as e:
+            print(f"Error converting timestamps: {e}")
         
         return df
     else:
+        print(f"No valid data found in log file {filename}")
         return pd.DataFrame(columns=['log_time', 'system_time', 'event_type', 
                                     'logical_clock', 'queue_length', 'peer_id', 
                                     'target_port'])
@@ -240,10 +252,14 @@ def main():
     Main function to analyze log files.
     """
     # Get list of log files
-    log_files = [f for f in os.listdir('.') if f.startswith('machine_') and f.endswith('.log')]
+    if not os.path.exists("logs"):
+        print("No logs directory found. Run the simulation first.")
+        return
+        
+    log_files = [f for f in os.listdir('logs') if f.startswith('machine_') and f.endswith('.log')]
     
     if not log_files:
-        print("No log files found. Run the simulation first.")
+        print("No log files found in logs directory. Run the simulation first.")
         return
     
     # Parse log files
@@ -255,8 +271,9 @@ def main():
         machine_id = int(log_file.split('_')[1].split('.')[0])
         machine_ids.append(machine_id)
         
-        # Parse log file
-        df = parse_log_file(log_file)
+        # Parse log file with correct path
+        log_path = os.path.join('logs', log_file)
+        df = parse_log_file(log_path)
         dfs.append(df)
         
         # Analyze clock jumps
@@ -275,8 +292,11 @@ def main():
         print(f"  - Max jump: {clock_jumps['max_jump']}")
         print(f"  - Mean jump: {clock_jumps['mean_jump']:.2f}")
         print(f"Message queue statistics:")
-        print(f"  - Max length: {queue_stats['max_queue']}")
-        print(f"  - Mean length: {queue_stats['mean_queue']:.2f} (if applicable)")
+        if queue_stats['max_queue'] is not None:
+            print(f"  - Max length: {queue_stats['max_queue']}")
+            print(f"  - Mean length: {queue_stats['mean_queue']:.2f}")
+        else:
+            print("  - No receive events recorded, queue statistics not available")
         print()
     
     # Generate plots

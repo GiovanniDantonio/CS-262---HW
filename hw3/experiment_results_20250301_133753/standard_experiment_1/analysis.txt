@@ -1,0 +1,40 @@
+Parsing log file: logs/machine_1.log
+Analysis for Machine 1:
+Total events: 66
+Event distribution: {'INTERNAL': 39, 'SEND': 27}
+Logical clock statistics:
+  - Final value: 60
+  - Min jump: 0.0
+  - Max jump: 1.0
+  - Mean jump: 0.91
+Message queue statistics:
+  - No receive events recorded, queue statistics not available
+
+Parsing log file: logs/machine_2.log
+Analysis for Machine 2:
+Total events: 257
+Event distribution: {'INTERNAL': 189, 'SEND': 54, 'RECEIVE': 14}
+Logical clock statistics:
+  - Final value: 294
+  - Min jump: 1.0
+  - Max jump: 3.0
+  - Mean jump: 1.14
+Message queue statistics:
+  - Max length: 0.0
+  - Mean length: 0.00
+
+Parsing log file: logs/machine_3.log
+Analysis for Machine 3:
+Total events: 236
+Event distribution: {'INTERNAL': 169, 'RECEIVE': 67}
+Logical clock statistics:
+  - Final value: 297
+  - Min jump: 1.0
+  - Max jump: 5.0
+  - Mean jump: 1.26
+Message queue statistics:
+  - Max length: 1.0
+  - Mean length: 0.10
+
+Generating plots...
+Analysis complete. Check the generated plot files.
