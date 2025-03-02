@@ -165,13 +165,15 @@ def run_experiment(num_runs=5, duration=60):
             f.write("#### Queue Analysis\n\n")
             for machine_id, results in analysis_results.items():
                 df = results.get('dataframe')
-                if df is not None and 'queue_length' in df.columns:
-                    queue_lengths = df['queue_length'].dropna()
-                    if not queue_lengths.empty:
-                        f.write(f"**Machine {machine_id}:**\n")
-                        f.write(f"- Max Queue Length: {queue_lengths.max()}\n")
-                        f.write(f"- Average Queue Length: {queue_lengths.mean():.2f}\n")
-                        f.write(f"- Median Queue Length: {queue_lengths.median():.2f}\n\n")
+                if df is not None:
+                    queue_data = df['queue_length'].dropna() if 'queue_length' in df.columns else pd.Series([0])
+                    f.write(f"Machine {machine_id}:\n")
+                    f.write(f"- Max Queue Length: {queue_data.max()}\n")
+                    f.write(f"- Average Queue Length: {queue_data.mean():.2f}\n")
+                    f.write(f"- Median Queue Length: {queue_data.median():.2f}\n")
+                    if queue_data.empty or queue_data.max() == 0:
+                        f.write(f"- Note: No messages were received by this machine\n")
+                    f.write("\n")
     
     # Generate overall analysis
     generate_cross_run_analysis(all_runs_data, exp_dir, notebook_path)
