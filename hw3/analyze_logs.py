@@ -80,7 +80,7 @@ def parse_log_file(filename: str) -> pd.DataFrame:
         
         # Convert timestamp strings to datetime objects
         try:
-            df['log_time'] = pd.to_datetime(df['log_time'])
+            df['log_time'] = pd.to_datetime(df['log_time'], format='%Y-%m-%d %H:%M:%S,%f')
             df['system_time'] = pd.to_datetime(df['system_time'])
         except Exception as e:
             print(f"Error converting timestamps: {e}")
