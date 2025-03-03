@@ -101,24 +101,23 @@ class VirtualMachine:
         Establish connections to peer virtual machines.
         """
         for peer_port in self.peer_ports:
-            # Only connect to peers with higher port numbers to avoid duplicate connections
-            if peer_port > self.port:
-                max_retries = 5
-                retry_count = 0
-                
-                while retry_count < max_retries:
-                    try:
-                        peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        peer_socket.connect(('localhost', peer_port))
-                        self.peer_connections[peer_port] = peer_socket
-                        self.logger.info(f"Connected to peer on port {peer_port}")
-                        break
-                    except ConnectionRefusedError:
-                        retry_count += 1
-                        time.sleep(1)  # Wait before retrying
-                        
-                if retry_count == max_retries:
-                    self.logger.error(f"Failed to connect to peer on port {peer_port}")
+            # Connect to all peers regardless of port number
+            max_retries = 5
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    peer_socket.connect(('localhost', peer_port))
+                    self.peer_connections[peer_port] = peer_socket
+                    self.logger.info(f"Connected to peer on port {peer_port}")
+                    break
+                except ConnectionRefusedError:
+                    retry_count += 1
+                    time.sleep(1)  # Wait before retrying
+                    
+            if retry_count == max_retries:
+                self.logger.error(f"Failed to connect to peer on port {peer_port}")
 
     def listen_for_connections(self):
         """
