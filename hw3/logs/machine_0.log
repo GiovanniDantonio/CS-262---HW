@@ -1,6 +1,6 @@
-2025-03-04 14:33:35,339 - Virtual Machine 0 initialized
-2025-03-04 14:33:35,340 - Clock Rate: 6 ticks/second
-2025-03-04 14:33:35,340 - Listening on port: 40000
-2025-03-04 14:33:35,340 - Peer ports: []
-2025-03-04 14:33:35,340 - Stopping virtual machine
-2025-03-04 14:33:35,340 - Virtual machine stopped
+2025-03-04 14:34:26,906 - Virtual Machine 0 initialized
+2025-03-04 14:34:26,906 - Clock Rate: 1 ticks/second
+2025-03-04 14:34:26,906 - Listening on port: 40000
+2025-03-04 14:34:26,906 - Peer ports: []
+2025-03-04 14:34:26,906 - Stopping virtual machine
+2025-03-04 14:34:26,906 - Virtual machine stopped
