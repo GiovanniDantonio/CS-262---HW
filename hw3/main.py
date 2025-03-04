@@ -35,7 +35,7 @@ def main():
     base_port = args.base_port
     ports = [base_port, base_port + 1, base_port + 2]
     
-    # Create log directory if it doesn't exist
+    # Create log directory
     if not os.path.exists("logs"):
         os.makedirs("logs")
     
@@ -57,7 +57,6 @@ def main():
         print(f"Starting {len(processes)} virtual machines...")
         for p in processes:
             p.start()
-            # Small delay to ensure machines start in order
             time.sleep(0.5)
         
         # Run for specified duration

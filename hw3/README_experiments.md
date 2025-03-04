@@ -28,7 +28,6 @@ Parameters:
 
 Output:
 - Creates a timestamped directory for all runs
-- Generates a lab notebook with analysis of all runs
 - Provides visual comparisons and statistics across runs
 
 ### 3. run_experiment2.py
@@ -48,12 +47,11 @@ Parameters:
 
 Output:
 - Creates a timestamped directory with subdirectories for each configuration
-- Generates a lab notebook with comparative analysis across configurations
 - Automatically modifies virtual_machine.py parameters for each run and restores defaults afterward
 
 ## Analysis
 
-Both experiment scripts generate detailed lab notebooks with:
+Both experiment scripts generate detailed analysis with:
 - Raw data on logical clock jumps, drift, and queue lengths
 - Comparative analysis across runs/configurations
 - Visualizations for each run/configuration

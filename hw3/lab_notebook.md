@@ -48,3 +48,13 @@
 - Modified parameters: Higher send probability
 - Configuration: event = random.randint(1, 5), Duration: 60 seconds
 - Observations: Check analysis and plots in `experiment2_results`.
+
+### Modified Experiment 3 (Date: 2025-03-04)
+- Modified parameters: Higher send probability
+- Configuration: event = random.randint(1, 5), Duration: 60 seconds
+- Observations: Check analysis and plots in `experiment2_results`.
+
+### Modified Experiment 4 (Date: 2025-03-04)
+- Modified parameters: Higher send probability
+- Configuration: event = random.randint(1, 5), Duration: 60 seconds
+- Observations: Check analysis and plots in `experiment2_results`.

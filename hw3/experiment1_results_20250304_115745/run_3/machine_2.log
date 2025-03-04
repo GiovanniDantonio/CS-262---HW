@@ -1,0 +1,71 @@
+2025-03-04 11:59:50,658 - Virtual Machine 2 initialized
+2025-03-04 11:59:50,658 - Clock Rate: 1 ticks/second
+2025-03-04 11:59:50,658 - Listening on port: 10001
+2025-03-04 11:59:50,658 - Peer ports: [10000, 10002]
+2025-03-04 11:59:50,659 - Connected to peer on port 10000
+2025-03-04 11:59:51,183 - Accepted connection from ('127.0.0.1', 58913)
+2025-03-04 11:59:51,381 - Accepted connection from ('127.0.0.1', 58914)
+2025-03-04 11:59:51,669 - Connected to peer on port 10002
+2025-03-04 11:59:51,669 - Network initialization completed
+2025-03-04 11:59:51,669 - Starting main event loop
+2025-03-04 11:59:51,669 - Clock rate: 1 ticks/second
+2025-03-04 11:59:51,670 - SEND - System Time: 2025-03-04 11:59:51.670028, Logical Clock: 1, To: Machine on port 10002
+2025-03-04 11:59:52,671 - RECEIVE - System Time: 2025-03-04 11:59:52.671102, Logical Clock: 9, Queue Length: 2, From: Machine 1
+2025-03-04 11:59:53,676 - RECEIVE - System Time: 2025-03-04 11:59:53.676442, Logical Clock: 10, Queue Length: 1, From: Machine 1
+2025-03-04 11:59:54,680 - RECEIVE - System Time: 2025-03-04 11:59:54.680724, Logical Clock: 11, Queue Length: 0, From: Machine 3
+2025-03-04 11:59:55,684 - INTERNAL - System Time: 2025-03-04 11:59:55.684768, Logical Clock: 12
+2025-03-04 11:59:56,690 - RECEIVE - System Time: 2025-03-04 11:59:56.689970, Logical Clock: 30, Queue Length: 0, From: Machine 3
+2025-03-04 11:59:57,695 - INTERNAL - System Time: 2025-03-04 11:59:57.695056, Logical Clock: 31
+2025-03-04 11:59:58,700 - INTERNAL - System Time: 2025-03-04 11:59:58.700259, Logical Clock: 32
+2025-03-04 11:59:59,705 - RECEIVE - System Time: 2025-03-04 11:59:59.705776, Logical Clock: 51, Queue Length: 0, From: Machine 1
+2025-03-04 12:00:00,711 - INTERNAL - System Time: 2025-03-04 12:00:00.710985, Logical Clock: 52
+2025-03-04 12:00:01,716 - RECEIVE - System Time: 2025-03-04 12:00:01.716400, Logical Clock: 58, Queue Length: 0, From: Machine 1
+2025-03-04 12:00:02,719 - RECEIVE - System Time: 2025-03-04 12:00:02.719414, Logical Clock: 65, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:03,721 - RECEIVE - System Time: 2025-03-04 12:00:03.721406, Logical Clock: 66, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:04,727 - RECEIVE - System Time: 2025-03-04 12:00:04.727290, Logical Clock: 67, Queue Length: 3, From: Machine 3
+2025-03-04 12:00:05,729 - RECEIVE - System Time: 2025-03-04 12:00:05.729210, Logical Clock: 68, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:06,733 - RECEIVE - System Time: 2025-03-04 12:00:06.733059, Logical Clock: 72, Queue Length: 4, From: Machine 1
+2025-03-04 12:00:07,736 - RECEIVE - System Time: 2025-03-04 12:00:07.736123, Logical Clock: 78, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:08,738 - RECEIVE - System Time: 2025-03-04 12:00:08.737849, Logical Clock: 86, Queue Length: 3, From: Machine 3
+2025-03-04 12:00:09,743 - RECEIVE - System Time: 2025-03-04 12:00:09.743532, Logical Clock: 92, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:10,748 - RECEIVE - System Time: 2025-03-04 12:00:10.747958, Logical Clock: 93, Queue Length: 2, From: Machine 3
+2025-03-04 12:00:11,749 - RECEIVE - System Time: 2025-03-04 12:00:11.748931, Logical Clock: 103, Queue Length: 2, From: Machine 3
+2025-03-04 12:00:12,750 - RECEIVE - System Time: 2025-03-04 12:00:12.750613, Logical Clock: 105, Queue Length: 2, From: Machine 3
+2025-03-04 12:00:13,756 - RECEIVE - System Time: 2025-03-04 12:00:13.756044, Logical Clock: 116, Queue Length: 1, From: Machine 3
+2025-03-04 12:00:14,760 - RECEIVE - System Time: 2025-03-04 12:00:14.759769, Logical Clock: 120, Queue Length: 0, From: Machine 3
+2025-03-04 12:00:15,767 - RECEIVE - System Time: 2025-03-04 12:00:15.767072, Logical Clock: 144, Queue Length: 2, From: Machine 1
+2025-03-04 12:00:16,774 - RECEIVE - System Time: 2025-03-04 12:00:16.773964, Logical Clock: 145, Queue Length: 5, From: Machine 3
+2025-03-04 12:00:17,775 - RECEIVE - System Time: 2025-03-04 12:00:17.775609, Logical Clock: 146, Queue Length: 4, From: Machine 1
+2025-03-04 12:00:18,777 - RECEIVE - System Time: 2025-03-04 12:00:18.776930, Logical Clock: 147, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:19,778 - RECEIVE - System Time: 2025-03-04 12:00:19.778206, Logical Clock: 148, Queue Length: 2, From: Machine 1
+2025-03-04 12:00:20,781 - RECEIVE - System Time: 2025-03-04 12:00:20.781109, Logical Clock: 149, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:21,790 - RECEIVE - System Time: 2025-03-04 12:00:21.790333, Logical Clock: 151, Queue Length: 5, From: Machine 1
+2025-03-04 12:00:22,801 - RECEIVE - System Time: 2025-03-04 12:00:22.801089, Logical Clock: 170, Queue Length: 6, From: Machine 1
+2025-03-04 12:00:23,806 - RECEIVE - System Time: 2025-03-04 12:00:23.806483, Logical Clock: 171, Queue Length: 7, From: Machine 1
+2025-03-04 12:00:24,811 - RECEIVE - System Time: 2025-03-04 12:00:24.811818, Logical Clock: 176, Queue Length: 7, From: Machine 1
+2025-03-04 12:00:25,817 - RECEIVE - System Time: 2025-03-04 12:00:25.817226, Logical Clock: 177, Queue Length: 8, From: Machine 3
+2025-03-04 12:00:26,821 - RECEIVE - System Time: 2025-03-04 12:00:26.821135, Logical Clock: 180, Queue Length: 8, From: Machine 1
+2025-03-04 12:00:27,826 - RECEIVE - System Time: 2025-03-04 12:00:27.826486, Logical Clock: 181, Queue Length: 7, From: Machine 3
+2025-03-04 12:00:28,833 - RECEIVE - System Time: 2025-03-04 12:00:28.833465, Logical Clock: 186, Queue Length: 8, From: Machine 3
+2025-03-04 12:00:29,842 - RECEIVE - System Time: 2025-03-04 12:00:29.838094, Logical Clock: 189, Queue Length: 9, From: Machine 1
+2025-03-04 12:00:30,847 - RECEIVE - System Time: 2025-03-04 12:00:30.847140, Logical Clock: 192, Queue Length: 10, From: Machine 1
+2025-03-04 12:00:31,848 - RECEIVE - System Time: 2025-03-04 12:00:31.848314, Logical Clock: 197, Queue Length: 9, From: Machine 1
+2025-03-04 12:00:32,855 - RECEIVE - System Time: 2025-03-04 12:00:32.854985, Logical Clock: 202, Queue Length: 8, From: Machine 3
+2025-03-04 12:00:33,860 - RECEIVE - System Time: 2025-03-04 12:00:33.860004, Logical Clock: 204, Queue Length: 7, From: Machine 1
+2025-03-04 12:00:34,866 - RECEIVE - System Time: 2025-03-04 12:00:34.865733, Logical Clock: 207, Queue Length: 6, From: Machine 3
+2025-03-04 12:00:35,869 - RECEIVE - System Time: 2025-03-04 12:00:35.869351, Logical Clock: 222, Queue Length: 6, From: Machine 1
+2025-03-04 12:00:36,871 - RECEIVE - System Time: 2025-03-04 12:00:36.871099, Logical Clock: 223, Queue Length: 6, From: Machine 3
+2025-03-04 12:00:37,875 - RECEIVE - System Time: 2025-03-04 12:00:37.874881, Logical Clock: 224, Queue Length: 5, From: Machine 3
+2025-03-04 12:00:38,877 - RECEIVE - System Time: 2025-03-04 12:00:38.877496, Logical Clock: 225, Queue Length: 5, From: Machine 1
+2025-03-04 12:00:39,880 - RECEIVE - System Time: 2025-03-04 12:00:39.880719, Logical Clock: 229, Queue Length: 6, From: Machine 1
+2025-03-04 12:00:40,885 - RECEIVE - System Time: 2025-03-04 12:00:40.885579, Logical Clock: 234, Queue Length: 5, From: Machine 1
+2025-03-04 12:00:41,891 - RECEIVE - System Time: 2025-03-04 12:00:41.891473, Logical Clock: 258, Queue Length: 5, From: Machine 1
+2025-03-04 12:00:42,893 - RECEIVE - System Time: 2025-03-04 12:00:42.893816, Logical Clock: 265, Queue Length: 4, From: Machine 3
+2025-03-04 12:00:43,899 - RECEIVE - System Time: 2025-03-04 12:00:43.899300, Logical Clock: 279, Queue Length: 3, From: Machine 1
+2025-03-04 12:00:44,903 - RECEIVE - System Time: 2025-03-04 12:00:44.902894, Logical Clock: 283, Queue Length: 2, From: Machine 3
+2025-03-04 12:00:45,906 - RECEIVE - System Time: 2025-03-04 12:00:45.906296, Logical Clock: 284, Queue Length: 2, From: Machine 1
+2025-03-04 12:00:46,912 - RECEIVE - System Time: 2025-03-04 12:00:46.912316, Logical Clock: 296, Queue Length: 1, From: Machine 3
+2025-03-04 12:00:47,916 - RECEIVE - System Time: 2025-03-04 12:00:47.916791, Logical Clock: 319, Queue Length: 1, From: Machine 3
+2025-03-04 12:00:48,920 - RECEIVE - System Time: 2025-03-04 12:00:48.920259, Logical Clock: 330, Queue Length: 2, From: Machine 3
+2025-03-04 12:00:49,925 - RECEIVE - System Time: 2025-03-04 12:00:49.925219, Logical Clock: 336, Queue Length: 2, From: Machine 1
+2025-03-04 12:00:50,926 - RECEIVE - System Time: 2025-03-04 12:00:50.926615, Logical Clock: 339, Queue Length: 1, From: Machine 1

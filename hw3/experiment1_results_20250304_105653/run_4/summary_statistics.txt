@@ -1,0 +1,57 @@
+DISTRIBUTED SYSTEM SIMULATION SUMMARY
+====================================
+
+CLOCK RATES:
+  Machine 1: 2 ticks/second
+  Machine 2: 3 ticks/second
+  Machine 3: 5 ticks/second
+
+EVENT COUNTS:
+  Machine 1:
+    Total Events: 119
+    Internal Events: 48 (40.3%)
+    Send Events: 19 (16.0%)
+    Receive Events: 52 (43.7%)
+  Machine 2:
+    Total Events: 177
+    Internal Events: 115 (65.0%)
+    Send Events: 31 (17.5%)
+    Receive Events: 31 (17.5%)
+  Machine 3:
+    Total Events: 295
+    Internal Events: 213 (72.2%)
+    Send Events: 58 (19.7%)
+    Receive Events: 24 (8.1%)
+
+QUEUE STATISTICS:
+  Machine 1:
+    Max Queue Length: 2.0
+    Average Queue Length: 0.25
+    Median Queue Length: 0.00
+  Machine 2:
+    Max Queue Length: 1.0
+    Average Queue Length: 0.19
+    Median Queue Length: 0.00
+  Machine 3:
+    Max Queue Length: 0.0
+    Average Queue Length: 0.00
+    Median Queue Length: 0.00
+
+LOGICAL CLOCK ANALYSIS:
+  Machine 1:
+    Starting Clock Value: 1
+    Ending Clock Value: 280
+    Max Jump: 11
+    Average Jump: 2.36
+  Machine 2:
+    Starting Clock Value: 1
+    Ending Clock Value: 292
+    Max Jump: 20
+    Average Jump: 1.65
+  Machine 3:
+    Starting Clock Value: 1
+    Ending Clock Value: 295
+    Max Jump: 1
+    Average Jump: 1.00
+
+END OF SUMMARY

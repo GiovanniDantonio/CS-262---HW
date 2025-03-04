@@ -196,6 +196,34 @@ class VirtualMachine:
                     self.logger.error(f"Error sending message to port {port}: {e}")
             else:
                 self.logger.warning(f"No connection to port {port}")
+    
+    def get_cycle_target(self, clockwise=True):
+        """
+        Determine the target peer port based on the specified cycle direction.
+
+        Args:
+            clockwise (bool): If True, use cycle 1→2, 2→3, 3→1.
+                              If False, use cycle 1→3, 2→1, 3→2.
+
+        Returns:
+            int: Target peer's port to send the message to.
+        """
+        mapping_clockwise = {1: 2, 2: 3, 3: 1}
+        mapping_counterclockwise = {1: 3, 2: 1, 3: 2}
+
+        target_machine_id = (
+            mapping_clockwise[self.machine_id] if clockwise else mapping_counterclockwise[self.machine_id]
+        )
+
+        # Assuming ports are sequential and machine_id corresponds to the port index
+        machine_ports = {1: self.port, 2: None, 3: None}
+        sorted_ports = sorted(self.peer_ports + [self.port])
+
+        # Map machine IDs to sorted ports
+        for idx, port in enumerate(sorted_ports, start=1):
+            machine_ports[idx] = port
+
+        return machine_ports.get(target_machine_id)
 
     def process_event(self):
         """
@@ -221,30 +249,22 @@ class VirtualMachine:
                 f"Queue Length: {queue_length}, From: Machine {sender_id}"
             )
         else:
-            sorted_peers = sorted(self.peer_ports)
-            # Generate random event (1-10)
             event = random.randint(1, 10)
-            
-            # System time for logging
-            system_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-            
+            system_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+
             if event == 1:
-                # Send to a random peer
-                if self.peer_ports:
-                    random_peer = random.choice(self.peer_ports)
-                    self.send_message([random_peer])
+                target_port = self.get_cycle_target(clockwise=True)
+                if target_port:
+                    self.send_message([target_port])
             elif event == 2:
-                # Send to a different random peer
-                if self.peer_ports:
-                    random_peer = random.choice(self.peer_ports)
-                    self.send_message([random_peer])
-            elif event == 3:
-                # Send to all peers
-                self.send_message(self.peer_ports)
+                target_port = self.get_cycle_target(clockwise=False)
+                if target_port:
+                    self.send_message([target_port])
             else:
-                # Internal event (4-10)
+                # Internal event
                 self.logical_clock += 1
                 self.logger.info(f"INTERNAL - System Time: {system_time}, Logical Clock: {self.logical_clock}")
+
 
     def run(self):
         """
