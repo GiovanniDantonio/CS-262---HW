@@ -31,7 +31,7 @@ def run_demo(duration=30):
     Args:
         duration: Duration of the simulation in seconds (default: 30)
     """
-    # Create a timestamped demo results directory
+    # Timestamped demo results directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     demo_dir = f"demo_results_{timestamp}"
     ensure_directory_exists(demo_dir)
@@ -40,9 +40,7 @@ def run_demo(duration=30):
     logs_dir = "logs"
     ensure_directory_exists(logs_dir)
     
-    # Step 1: Run the simulation
     print(f"Running simulation for {duration} seconds...")
-    # Save original sys.argv and replace it with our arguments
     orig_argv = sys.argv
     sys.argv = ["main.py", "--duration", str(duration)]
     
@@ -52,16 +50,14 @@ def run_demo(duration=30):
     # Restore original sys.argv
     sys.argv = orig_argv
     
-    # Step 2: Parse logs and analyze
+    # Parse logs and analyze
     print("Analyzing logs...")
     dfs = []
     machine_ids = []
     analysis_results = {}
-    
     for machine_id in range(1, 4):
         log_file = f"logs/machine_{machine_id}.log"
         if os.path.exists(log_file):
-            # Parse log file
             df = analyze_logs.parse_log_file(log_file)
             
             if not df.empty:
@@ -80,19 +76,16 @@ def run_demo(duration=30):
                 if 'RECEIVE' in df['event_type'].values:
                     analysis_results[machine_id]['queue_stats'] = analyze_logs.analyze_queue_lengths(df)
     
-    # Step 3: Generate visualizations
     print("Generating visualizations...")
     analyze_logs.plot_logical_clocks(dfs, machine_ids, filename=os.path.join(demo_dir, "logical_clocks.png"))
     analyze_logs.plot_queue_lengths(dfs, machine_ids, filename=os.path.join(demo_dir, "queue_lengths.png"))
     analyze_logs.plot_event_distribution(dfs, machine_ids, filename=os.path.join(demo_dir, "event_distribution.png"))
     
-    # Step 4: Create clock rate comparison
+    # Create clock rate comparison + summary statistics
     create_clock_rate_comparison(analysis_results, demo_dir)
-    
-    # Step 5: Generate summary statistics
     write_summary_statistics(analysis_results, demo_dir)
     
-    # Step 6: Copy logs to demo directory
+    # Copy logs to demo directory
     for machine_id in range(1, 4):
         log_file = f"logs/machine_{machine_id}.log"
         if os.path.exists(log_file):

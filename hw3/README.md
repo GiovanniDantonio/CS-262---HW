@@ -19,7 +19,3 @@ It simulates multiple machines running at different speeds on a single physical 
 ```bash
 python main.py
 ```
-
-## Lab Notebook
-
-Observations and analysis of the simulation results are documented in `lab_notebook.md`.

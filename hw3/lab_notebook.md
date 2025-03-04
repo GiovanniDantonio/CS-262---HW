@@ -3,15 +3,14 @@
 ## Design Decisions
 
 ### System Architecture
-- We decided to implement each virtual machine as a separate process using Python's `multiprocessing` module
+- We decided to implement each virtual machine as a separate process using Python's `multiprocessing` module. We did this since, per Jared's Ed Post, ``the point is to model a distributed system with machines that have different clock rates, and that it doesn't make much sense for them to have shared memory if they're just communicating with each other, using processes probably makes more sense.''
 - Communication between machines is done using sockets
 - Each machine maintains its own message queue and logical clock
 
 ### Logical Clock Implementation
-- Following Lamport's rules for logical clocks:
-  - Increment on internal events
-  - On send: increment then send
-  - On receive: set to max(local_clock, received_clock) + 1
+- Increment on internal events
+- On send: increment then send
+- On receive: set to max(local_clock, received_clock) + 1
 
 ### Random Event Generation
 - Each machine generates events randomly on each clock cycle:
@@ -20,42 +19,32 @@
 
 ## Experimental Results
 
-(Experiments will be recorded here after running the simulation)
-
 ### Experiment 1 (Date: 2025-03-01)
 - Configuration: Standard, Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_1/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_1`.
-- Analysis: TBD
+- Observations: Check plots and analysis in `experiment_1/analysis.txt`.
 
 ### Experiment 2 (Date: 2025-03-01)
 - Configuration: Standard, Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_2/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_2`.
-- Analysis: TBD
+- Observations: Check plots and analysis in `experiment_1/analysis.txt`.
 
-### Experiment 3 (Date: 2025-03-01)
+### Experiment 3 (Date: 2025-03-02)
 - Configuration: Standard, Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_3/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_3`.
-- Analysis: TBD
+- Observations: Check plots and analysis in `experiment_1/analysis.txt`.
 
-### Experiment 4 (Date: 2025-03-01)
+### Experiment 4 (Date: 2025-03-04)
 - Configuration: Standard, Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_4/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_4`.
-- Analysis: TBD
+- Observations: Check plots and analysis in `experiment_1/analysis.txt`.
 
-### Experiment 5 (Date: 2025-03-01)
+### Experiment 5 (Date: 2025-03-04)
 - Configuration: Standard, Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/standard_experiment_5/analysis.txt` and plots in `experiment_results_20250301_133753/standard_experiment_5`.
-- Analysis: TBD
+- Observations: Check plots and analysis in `experiment_1/analysis.txt`.
 
 ### Modified Experiment 1 (Date: 2025-03-01)
 - Modified parameters: Lower clock variation
 - Configuration: clock_rate = random.randint(3, 6), Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/modified_experiment_1/analysis.txt` and plots in `experiment_results_20250301_133753/modified_experiment_1`.
-- Analysis: TBD
+- Observations: Check analysis and plots in `experiment2_results`.
 
-### Modified Experiment 2 (Date: 2025-03-01)
+### Modified Experiment 2 (Date: 2025-03-04)
 - Modified parameters: Higher send probability
 - Configuration: event = random.randint(1, 5), Duration: 60 seconds
-- Observations: Check analysis in `experiment_results_20250301_133753/modified_experiment_2/analysis.txt` and plots in `experiment_results_20250301_133753/modified_experiment_2`.
-- Analysis: TBD
-
+- Observations: Check analysis and plots in `experiment2_results`.

@@ -24,7 +24,6 @@ def parse_log_file(filename: str) -> pd.DataFrame:
     send_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - SEND - System Time: (.*?), Logical Clock: (\d+), To: Machine on port (\d+)'
     internal_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - INTERNAL - System Time: (.*?), Logical Clock: (\d+)'
     
-    # Data to collect
     data = []
     
     try:
@@ -165,7 +164,6 @@ def plot_logical_clocks(dfs: List[pd.DataFrame], machine_ids: List[int], filenam
             # Sort by system time
             df = df.sort_values('system_time')
             
-            # Plot logical clock values
             plt.plot(df['system_time'], df['logical_clock'], 
                      label=f'Machine {machine_ids[i]}', 
                      marker='o', markersize=3, linestyle='-')
@@ -197,7 +195,6 @@ def plot_queue_lengths(dfs: List[pd.DataFrame], machine_ids: List[int], filename
             # Sort by system time
             receive_df = receive_df.sort_values('system_time')
             
-            # Plot queue lengths
             plt.plot(receive_df['system_time'], receive_df['queue_length'], 
                      label=f'Machine {machine_ids[i]}', 
                      marker='o', markersize=3, linestyle='-')
@@ -238,7 +235,6 @@ def plot_event_distribution(dfs: List[pd.DataFrame], machine_ids: List[int], fil
         event_df = pd.DataFrame(event_counts)
         event_df.set_index('Machine', inplace=True)
         
-        # Plot as stacked bar chart
         event_df.plot(kind='bar', stacked=True, figsize=(10, 6))
         plt.xlabel('Machine')
         plt.ylabel('Event Count')
@@ -267,7 +263,7 @@ def main():
     machine_ids = []
     
     for log_file in log_files:
-        # Extract machine ID from filename
+        # Extract machine ID from file
         machine_id = int(log_file.split('_')[1].split('.')[0])
         machine_ids.append(machine_id)
         
@@ -278,7 +274,6 @@ def main():
         
         # Analyze clock jumps
         clock_jumps = analyze_clock_jumps(df)
-        
         # Analyze queue lengths
         queue_stats = analyze_queue_lengths(df)
         
@@ -299,13 +294,12 @@ def main():
             print("  - No receive events recorded, queue statistics not available")
         print()
     
-    # Generate plots
     print("Generating plots...")
     plot_logical_clocks(dfs, machine_ids)
     plot_queue_lengths(dfs, machine_ids)
     plot_event_distribution(dfs, machine_ids)
     
-    print("Analysis complete. Check the generated plot files.")
+    print("Analysis complete, generated plot files.")
 
 if __name__ == "__main__":
     main()

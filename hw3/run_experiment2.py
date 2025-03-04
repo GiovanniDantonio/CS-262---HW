@@ -386,16 +386,6 @@ def generate_comparative_analysis(all_configs_data, exp_dir, notebook_path):
                 f.write("| " + " | ".join(row) + " |\n")
         
         f.write("\n")
-        
-        # Add summary reflections section for the user to fill in
-        f.write("## Summary Reflections\n\n")
-        f.write("*This section should be filled in with reflections on how the different configurations affected the results.*\n\n")
-        f.write("Consider addressing these questions:\n\n")
-        f.write("1. How did reducing the variation in clock cycles affect the system?\n")
-        f.write("2. What impact did reducing the probability of internal events have?\n")
-        f.write("3. How did the combined changes affect the system compared to individual changes?\n")
-        f.write("4. What hypotheses can you form about the relationship between these parameters and system behavior?\n")
-        f.write("5. Were there any unexpected observations when parameters were changed?\n\n")
 
 def parse_arguments():
     """Parse command-line arguments."""

@@ -350,16 +350,3 @@ This section compares results across different configurations.
 | smaller_clock_variation | 2 | 239 | 239 | 237 |
 | smaller_internal_prob | 2 | 178 | 180 | 180 |
 | both_modifications | 0 | 254 | 254 | 254 |
-
-## Summary Reflections
-
-*This section should be filled in with reflections on how the different configurations affected the results.*
-
-Consider addressing these questions:
-
-1. How did reducing the variation in clock cycles affect the system?
-2. What impact did reducing the probability of internal events have?
-3. How did the combined changes affect the system compared to individual changes?
-4. What hypotheses can you form about the relationship between these parameters and system behavior?
-5. Were there any unexpected observations when parameters were changed?
-
