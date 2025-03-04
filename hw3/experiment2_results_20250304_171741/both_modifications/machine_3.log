@@ -1,0 +1,265 @@
+2025-03-04 17:20:49,243 - Virtual Machine 3 initialized
+2025-03-04 17:20:49,243 - Clock Rate: 4 ticks/second
+2025-03-04 17:20:49,243 - Listening on port: 10002
+2025-03-04 17:20:49,243 - Peer ports: [10000, 10001]
+2025-03-04 17:20:49,244 - Connected to peer on port 10000
+2025-03-04 17:20:49,244 - Connected to peer on port 10001
+2025-03-04 17:20:49,244 - Network initialization completed
+2025-03-04 17:20:49,244 - Starting main event loop
+2025-03-04 17:20:49,244 - Clock rate: 4 ticks/second
+2025-03-04 17:20:49,244 - INTERNAL - System Time: 2025-03-04 17:20:49.244554, Logical Clock: 1
+2025-03-04 17:20:49,481 - Accepted connection from ('127.0.0.1', 50914)
+2025-03-04 17:20:49,504 - INTERNAL - System Time: 2025-03-04 17:20:49.500117, Logical Clock: 2
+2025-03-04 17:20:49,756 - RECEIVE - System Time: 2025-03-04 17:20:49.756641, Logical Clock: 3, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:49,761 - Accepted connection from ('127.0.0.1', 50915)
+2025-03-04 17:20:50,011 - SEND - System Time: 2025-03-04 17:20:50.011089, Logical Clock: 4, To: Machine on port 10000
+2025-03-04 17:20:50,266 - INTERNAL - System Time: 2025-03-04 17:20:50.266153, Logical Clock: 5
+2025-03-04 17:20:50,521 - INTERNAL - System Time: 2025-03-04 17:20:50.521622, Logical Clock: 6
+2025-03-04 17:20:50,777 - INTERNAL - System Time: 2025-03-04 17:20:50.777055, Logical Clock: 7
+2025-03-04 17:20:51,032 - INTERNAL - System Time: 2025-03-04 17:20:51.032520, Logical Clock: 8
+2025-03-04 17:20:51,286 - RECEIVE - System Time: 2025-03-04 17:20:51.286014, Logical Clock: 9, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:51,539 - RECEIVE - System Time: 2025-03-04 17:20:51.539550, Logical Clock: 10, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:51,795 - RECEIVE - System Time: 2025-03-04 17:20:51.794888, Logical Clock: 11, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:52,046 - SEND - System Time: 2025-03-04 17:20:52.045921, Logical Clock: 12, To: Machine on port 10000
+2025-03-04 17:20:52,300 - INTERNAL - System Time: 2025-03-04 17:20:52.299845, Logical Clock: 13
+2025-03-04 17:20:52,554 - INTERNAL - System Time: 2025-03-04 17:20:52.554371, Logical Clock: 14
+2025-03-04 17:20:52,807 - INTERNAL - System Time: 2025-03-04 17:20:52.806923, Logical Clock: 15
+2025-03-04 17:20:53,059 - INTERNAL - System Time: 2025-03-04 17:20:53.059029, Logical Clock: 16
+2025-03-04 17:20:53,314 - INTERNAL - System Time: 2025-03-04 17:20:53.314376, Logical Clock: 17
+2025-03-04 17:20:53,568 - INTERNAL - System Time: 2025-03-04 17:20:53.567981, Logical Clock: 18
+2025-03-04 17:20:53,821 - SEND - System Time: 2025-03-04 17:20:53.820981, Logical Clock: 19, To: Machine on port 10001
+2025-03-04 17:20:54,072 - INTERNAL - System Time: 2025-03-04 17:20:54.072052, Logical Clock: 20
+2025-03-04 17:20:54,326 - RECEIVE - System Time: 2025-03-04 17:20:54.326647, Logical Clock: 21, Queue Length: 0, From: Machine 2
+2025-03-04 17:20:54,580 - INTERNAL - System Time: 2025-03-04 17:20:54.580166, Logical Clock: 22
+2025-03-04 17:20:54,832 - SEND - System Time: 2025-03-04 17:20:54.832290, Logical Clock: 23, To: Machine on port 10000
+2025-03-04 17:20:54,832 - SEND - System Time: 2025-03-04 17:20:54.832290, Logical Clock: 23, To: Machine on port 10001
+2025-03-04 17:20:55,086 - INTERNAL - System Time: 2025-03-04 17:20:55.086096, Logical Clock: 24
+2025-03-04 17:20:55,339 - INTERNAL - System Time: 2025-03-04 17:20:55.338954, Logical Clock: 25
+2025-03-04 17:20:55,594 - RECEIVE - System Time: 2025-03-04 17:20:55.594251, Logical Clock: 26, Queue Length: 0, From: Machine 2
+2025-03-04 17:20:55,847 - RECEIVE - System Time: 2025-03-04 17:20:55.847819, Logical Clock: 27, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:56,099 - INTERNAL - System Time: 2025-03-04 17:20:56.099021, Logical Clock: 28
+2025-03-04 17:20:56,350 - RECEIVE - System Time: 2025-03-04 17:20:56.350743, Logical Clock: 29, Queue Length: 1, From: Machine 2
+2025-03-04 17:20:56,605 - RECEIVE - System Time: 2025-03-04 17:20:56.605350, Logical Clock: 30, Queue Length: 1, From: Machine 1
+2025-03-04 17:20:56,860 - RECEIVE - System Time: 2025-03-04 17:20:56.860278, Logical Clock: 31, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:57,114 - SEND - System Time: 2025-03-04 17:20:57.114504, Logical Clock: 32, To: Machine on port 10001
+2025-03-04 17:20:57,369 - RECEIVE - System Time: 2025-03-04 17:20:57.368926, Logical Clock: 33, Queue Length: 0, From: Machine 2
+2025-03-04 17:20:57,624 - INTERNAL - System Time: 2025-03-04 17:20:57.624252, Logical Clock: 34
+2025-03-04 17:20:57,877 - INTERNAL - System Time: 2025-03-04 17:20:57.877627, Logical Clock: 35
+2025-03-04 17:20:58,129 - SEND - System Time: 2025-03-04 17:20:58.129302, Logical Clock: 36, To: Machine on port 10000
+2025-03-04 17:20:58,130 - SEND - System Time: 2025-03-04 17:20:58.129302, Logical Clock: 36, To: Machine on port 10001
+2025-03-04 17:20:58,385 - RECEIVE - System Time: 2025-03-04 17:20:58.384884, Logical Clock: 37, Queue Length: 1, From: Machine 2
+2025-03-04 17:20:58,636 - RECEIVE - System Time: 2025-03-04 17:20:58.636858, Logical Clock: 38, Queue Length: 1, From: Machine 1
+2025-03-04 17:20:58,895 - RECEIVE - System Time: 2025-03-04 17:20:58.894996, Logical Clock: 39, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:59,150 - INTERNAL - System Time: 2025-03-04 17:20:59.150231, Logical Clock: 40
+2025-03-04 17:20:59,406 - INTERNAL - System Time: 2025-03-04 17:20:59.406224, Logical Clock: 41
+2025-03-04 17:20:59,658 - RECEIVE - System Time: 2025-03-04 17:20:59.657977, Logical Clock: 42, Queue Length: 0, From: Machine 1
+2025-03-04 17:20:59,912 - RECEIVE - System Time: 2025-03-04 17:20:59.912263, Logical Clock: 43, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:00,165 - INTERNAL - System Time: 2025-03-04 17:21:00.165309, Logical Clock: 44
+2025-03-04 17:21:00,417 - RECEIVE - System Time: 2025-03-04 17:21:00.417215, Logical Clock: 45, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:00,669 - INTERNAL - System Time: 2025-03-04 17:21:00.668863, Logical Clock: 46
+2025-03-04 17:21:00,920 - RECEIVE - System Time: 2025-03-04 17:21:00.920309, Logical Clock: 47, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:01,173 - INTERNAL - System Time: 2025-03-04 17:21:01.173769, Logical Clock: 48
+2025-03-04 17:21:01,426 - RECEIVE - System Time: 2025-03-04 17:21:01.426178, Logical Clock: 49, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:01,678 - INTERNAL - System Time: 2025-03-04 17:21:01.678915, Logical Clock: 50
+2025-03-04 17:21:01,931 - INTERNAL - System Time: 2025-03-04 17:21:01.931323, Logical Clock: 51
+2025-03-04 17:21:02,185 - INTERNAL - System Time: 2025-03-04 17:21:02.185538, Logical Clock: 52
+2025-03-04 17:21:02,437 - RECEIVE - System Time: 2025-03-04 17:21:02.437308, Logical Clock: 53, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:02,691 - INTERNAL - System Time: 2025-03-04 17:21:02.691114, Logical Clock: 54
+2025-03-04 17:21:02,946 - RECEIVE - System Time: 2025-03-04 17:21:02.946521, Logical Clock: 55, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:03,201 - RECEIVE - System Time: 2025-03-04 17:21:03.201129, Logical Clock: 56, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:03,453 - INTERNAL - System Time: 2025-03-04 17:21:03.453731, Logical Clock: 57
+2025-03-04 17:21:03,705 - RECEIVE - System Time: 2025-03-04 17:21:03.705197, Logical Clock: 58, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:03,959 - SEND - System Time: 2025-03-04 17:21:03.959333, Logical Clock: 59, To: Machine on port 10000
+2025-03-04 17:21:03,959 - SEND - System Time: 2025-03-04 17:21:03.959333, Logical Clock: 59, To: Machine on port 10001
+2025-03-04 17:21:04,215 - SEND - System Time: 2025-03-04 17:21:04.215305, Logical Clock: 60, To: Machine on port 10000
+2025-03-04 17:21:04,216 - SEND - System Time: 2025-03-04 17:21:04.215305, Logical Clock: 60, To: Machine on port 10001
+2025-03-04 17:21:04,470 - RECEIVE - System Time: 2025-03-04 17:21:04.470571, Logical Clock: 61, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:04,722 - INTERNAL - System Time: 2025-03-04 17:21:04.721963, Logical Clock: 62
+2025-03-04 17:21:04,972 - RECEIVE - System Time: 2025-03-04 17:21:04.972799, Logical Clock: 63, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:05,226 - INTERNAL - System Time: 2025-03-04 17:21:05.226156, Logical Clock: 64
+2025-03-04 17:21:05,477 - INTERNAL - System Time: 2025-03-04 17:21:05.477198, Logical Clock: 65
+2025-03-04 17:21:05,731 - INTERNAL - System Time: 2025-03-04 17:21:05.731755, Logical Clock: 66
+2025-03-04 17:21:05,987 - INTERNAL - System Time: 2025-03-04 17:21:05.987178, Logical Clock: 67
+2025-03-04 17:21:06,245 - SEND - System Time: 2025-03-04 17:21:06.245560, Logical Clock: 68, To: Machine on port 10000
+2025-03-04 17:21:06,500 - RECEIVE - System Time: 2025-03-04 17:21:06.499846, Logical Clock: 69, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:06,751 - SEND - System Time: 2025-03-04 17:21:06.751158, Logical Clock: 70, To: Machine on port 10000
+2025-03-04 17:21:07,006 - INTERNAL - System Time: 2025-03-04 17:21:07.005884, Logical Clock: 71
+2025-03-04 17:21:07,259 - RECEIVE - System Time: 2025-03-04 17:21:07.259034, Logical Clock: 72, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:07,512 - RECEIVE - System Time: 2025-03-04 17:21:07.512776, Logical Clock: 73, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:07,766 - INTERNAL - System Time: 2025-03-04 17:21:07.765905, Logical Clock: 74
+2025-03-04 17:21:08,022 - SEND - System Time: 2025-03-04 17:21:08.022153, Logical Clock: 75, To: Machine on port 10000
+2025-03-04 17:21:08,023 - SEND - System Time: 2025-03-04 17:21:08.022153, Logical Clock: 75, To: Machine on port 10001
+2025-03-04 17:21:08,274 - INTERNAL - System Time: 2025-03-04 17:21:08.273928, Logical Clock: 76
+2025-03-04 17:21:08,525 - RECEIVE - System Time: 2025-03-04 17:21:08.525050, Logical Clock: 77, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:08,779 - RECEIVE - System Time: 2025-03-04 17:21:08.779598, Logical Clock: 78, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:09,034 - INTERNAL - System Time: 2025-03-04 17:21:09.034059, Logical Clock: 79
+2025-03-04 17:21:09,285 - INTERNAL - System Time: 2025-03-04 17:21:09.285444, Logical Clock: 80
+2025-03-04 17:21:09,540 - RECEIVE - System Time: 2025-03-04 17:21:09.540315, Logical Clock: 81, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:09,793 - INTERNAL - System Time: 2025-03-04 17:21:09.793361, Logical Clock: 82
+2025-03-04 17:21:10,048 - INTERNAL - System Time: 2025-03-04 17:21:10.048589, Logical Clock: 83
+2025-03-04 17:21:10,300 - RECEIVE - System Time: 2025-03-04 17:21:10.300801, Logical Clock: 84, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:10,556 - RECEIVE - System Time: 2025-03-04 17:21:10.556383, Logical Clock: 85, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:10,808 - INTERNAL - System Time: 2025-03-04 17:21:10.808200, Logical Clock: 86
+2025-03-04 17:21:11,063 - INTERNAL - System Time: 2025-03-04 17:21:11.063460, Logical Clock: 87
+2025-03-04 17:21:11,319 - INTERNAL - System Time: 2025-03-04 17:21:11.318842, Logical Clock: 88
+2025-03-04 17:21:11,571 - RECEIVE - System Time: 2025-03-04 17:21:11.571524, Logical Clock: 89, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:11,826 - SEND - System Time: 2025-03-04 17:21:11.826004, Logical Clock: 90, To: Machine on port 10001
+2025-03-04 17:21:12,078 - INTERNAL - System Time: 2025-03-04 17:21:12.078057, Logical Clock: 91
+2025-03-04 17:21:12,333 - SEND - System Time: 2025-03-04 17:21:12.333478, Logical Clock: 92, To: Machine on port 10000
+2025-03-04 17:21:12,586 - SEND - System Time: 2025-03-04 17:21:12.586101, Logical Clock: 93, To: Machine on port 10001
+2025-03-04 17:21:12,837 - RECEIVE - System Time: 2025-03-04 17:21:12.837737, Logical Clock: 94, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:13,090 - SEND - System Time: 2025-03-04 17:21:13.089888, Logical Clock: 95, To: Machine on port 10000
+2025-03-04 17:21:13,090 - SEND - System Time: 2025-03-04 17:21:13.089888, Logical Clock: 95, To: Machine on port 10001
+2025-03-04 17:21:13,346 - INTERNAL - System Time: 2025-03-04 17:21:13.345795, Logical Clock: 96
+2025-03-04 17:21:13,597 - INTERNAL - System Time: 2025-03-04 17:21:13.597259, Logical Clock: 97
+2025-03-04 17:21:13,852 - SEND - System Time: 2025-03-04 17:21:13.851554, Logical Clock: 98, To: Machine on port 10000
+2025-03-04 17:21:14,107 - SEND - System Time: 2025-03-04 17:21:14.107560, Logical Clock: 99, To: Machine on port 10001
+2025-03-04 17:21:14,358 - INTERNAL - System Time: 2025-03-04 17:21:14.358649, Logical Clock: 100
+2025-03-04 17:21:14,610 - SEND - System Time: 2025-03-04 17:21:14.610435, Logical Clock: 101, To: Machine on port 10001
+2025-03-04 17:21:14,866 - SEND - System Time: 2025-03-04 17:21:14.865776, Logical Clock: 102, To: Machine on port 10000
+2025-03-04 17:21:15,118 - RECEIVE - System Time: 2025-03-04 17:21:15.117882, Logical Clock: 103, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:15,372 - INTERNAL - System Time: 2025-03-04 17:21:15.371841, Logical Clock: 104
+2025-03-04 17:21:15,628 - INTERNAL - System Time: 2025-03-04 17:21:15.627869, Logical Clock: 105
+2025-03-04 17:21:15,888 - INTERNAL - System Time: 2025-03-04 17:21:15.888230, Logical Clock: 106
+2025-03-04 17:21:16,140 - INTERNAL - System Time: 2025-03-04 17:21:16.140115, Logical Clock: 107
+2025-03-04 17:21:16,395 - INTERNAL - System Time: 2025-03-04 17:21:16.394902, Logical Clock: 108
+2025-03-04 17:21:16,650 - RECEIVE - System Time: 2025-03-04 17:21:16.650815, Logical Clock: 109, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:16,905 - SEND - System Time: 2025-03-04 17:21:16.904884, Logical Clock: 110, To: Machine on port 10000
+2025-03-04 17:21:17,157 - RECEIVE - System Time: 2025-03-04 17:21:17.157036, Logical Clock: 111, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:17,408 - INTERNAL - System Time: 2025-03-04 17:21:17.408578, Logical Clock: 112
+2025-03-04 17:21:17,660 - SEND - System Time: 2025-03-04 17:21:17.660340, Logical Clock: 113, To: Machine on port 10000
+2025-03-04 17:21:17,913 - RECEIVE - System Time: 2025-03-04 17:21:17.913279, Logical Clock: 114, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:18,166 - INTERNAL - System Time: 2025-03-04 17:21:18.166729, Logical Clock: 115
+2025-03-04 17:21:18,422 - SEND - System Time: 2025-03-04 17:21:18.422112, Logical Clock: 116, To: Machine on port 10000
+2025-03-04 17:21:18,422 - SEND - System Time: 2025-03-04 17:21:18.422112, Logical Clock: 116, To: Machine on port 10001
+2025-03-04 17:21:18,674 - SEND - System Time: 2025-03-04 17:21:18.674280, Logical Clock: 117, To: Machine on port 10000
+2025-03-04 17:21:18,929 - INTERNAL - System Time: 2025-03-04 17:21:18.929529, Logical Clock: 118
+2025-03-04 17:21:19,181 - SEND - System Time: 2025-03-04 17:21:19.180959, Logical Clock: 119, To: Machine on port 10001
+2025-03-04 17:21:19,434 - INTERNAL - System Time: 2025-03-04 17:21:19.434081, Logical Clock: 120
+2025-03-04 17:21:19,684 - INTERNAL - System Time: 2025-03-04 17:21:19.684506, Logical Clock: 121
+2025-03-04 17:21:19,938 - SEND - System Time: 2025-03-04 17:21:19.938261, Logical Clock: 122, To: Machine on port 10000
+2025-03-04 17:21:20,189 - INTERNAL - System Time: 2025-03-04 17:21:20.189369, Logical Clock: 123
+2025-03-04 17:21:20,445 - RECEIVE - System Time: 2025-03-04 17:21:20.444767, Logical Clock: 124, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:20,697 - INTERNAL - System Time: 2025-03-04 17:21:20.697147, Logical Clock: 125
+2025-03-04 17:21:20,948 - INTERNAL - System Time: 2025-03-04 17:21:20.948482, Logical Clock: 126
+2025-03-04 17:21:21,203 - RECEIVE - System Time: 2025-03-04 17:21:21.203404, Logical Clock: 127, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:21,455 - SEND - System Time: 2025-03-04 17:21:21.454929, Logical Clock: 128, To: Machine on port 10001
+2025-03-04 17:21:21,706 - RECEIVE - System Time: 2025-03-04 17:21:21.706517, Logical Clock: 129, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:21,960 - INTERNAL - System Time: 2025-03-04 17:21:21.960272, Logical Clock: 130
+2025-03-04 17:21:22,215 - INTERNAL - System Time: 2025-03-04 17:21:22.215608, Logical Clock: 131
+2025-03-04 17:21:22,467 - INTERNAL - System Time: 2025-03-04 17:21:22.467387, Logical Clock: 132
+2025-03-04 17:21:22,724 - RECEIVE - System Time: 2025-03-04 17:21:22.724760, Logical Clock: 133, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:22,979 - INTERNAL - System Time: 2025-03-04 17:21:22.978819, Logical Clock: 134
+2025-03-04 17:21:23,232 - RECEIVE - System Time: 2025-03-04 17:21:23.232264, Logical Clock: 135, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:23,485 - RECEIVE - System Time: 2025-03-04 17:21:23.485653, Logical Clock: 136, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:23,740 - INTERNAL - System Time: 2025-03-04 17:21:23.740170, Logical Clock: 137
+2025-03-04 17:21:23,993 - RECEIVE - System Time: 2025-03-04 17:21:23.993748, Logical Clock: 138, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:24,245 - INTERNAL - System Time: 2025-03-04 17:21:24.245594, Logical Clock: 139
+2025-03-04 17:21:24,501 - RECEIVE - System Time: 2025-03-04 17:21:24.500990, Logical Clock: 140, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:24,756 - INTERNAL - System Time: 2025-03-04 17:21:24.756349, Logical Clock: 141
+2025-03-04 17:21:25,011 - INTERNAL - System Time: 2025-03-04 17:21:25.011708, Logical Clock: 142
+2025-03-04 17:21:25,266 - INTERNAL - System Time: 2025-03-04 17:21:25.265793, Logical Clock: 143
+2025-03-04 17:21:25,518 - INTERNAL - System Time: 2025-03-04 17:21:25.518501, Logical Clock: 144
+2025-03-04 17:21:25,773 - SEND - System Time: 2025-03-04 17:21:25.773567, Logical Clock: 145, To: Machine on port 10001
+2025-03-04 17:21:26,030 - RECEIVE - System Time: 2025-03-04 17:21:26.030089, Logical Clock: 146, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:26,285 - INTERNAL - System Time: 2025-03-04 17:21:26.285333, Logical Clock: 147
+2025-03-04 17:21:26,540 - INTERNAL - System Time: 2025-03-04 17:21:26.540283, Logical Clock: 148
+2025-03-04 17:21:26,795 - INTERNAL - System Time: 2025-03-04 17:21:26.795043, Logical Clock: 149
+2025-03-04 17:21:27,047 - SEND - System Time: 2025-03-04 17:21:27.047052, Logical Clock: 150, To: Machine on port 10001
+2025-03-04 17:21:27,298 - INTERNAL - System Time: 2025-03-04 17:21:27.297879, Logical Clock: 151
+2025-03-04 17:21:27,552 - SEND - System Time: 2025-03-04 17:21:27.552315, Logical Clock: 152, To: Machine on port 10000
+2025-03-04 17:21:27,553 - SEND - System Time: 2025-03-04 17:21:27.552315, Logical Clock: 152, To: Machine on port 10001
+2025-03-04 17:21:27,807 - INTERNAL - System Time: 2025-03-04 17:21:27.807566, Logical Clock: 153
+2025-03-04 17:21:28,066 - INTERNAL - System Time: 2025-03-04 17:21:28.066059, Logical Clock: 154
+2025-03-04 17:21:28,317 - INTERNAL - System Time: 2025-03-04 17:21:28.317526, Logical Clock: 155
+2025-03-04 17:21:28,572 - INTERNAL - System Time: 2025-03-04 17:21:28.572815, Logical Clock: 156
+2025-03-04 17:21:28,828 - INTERNAL - System Time: 2025-03-04 17:21:28.828095, Logical Clock: 157
+2025-03-04 17:21:29,081 - RECEIVE - System Time: 2025-03-04 17:21:29.081488, Logical Clock: 158, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:29,334 - RECEIVE - System Time: 2025-03-04 17:21:29.333931, Logical Clock: 159, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:29,588 - SEND - System Time: 2025-03-04 17:21:29.587764, Logical Clock: 160, To: Machine on port 10001
+2025-03-04 17:21:29,842 - INTERNAL - System Time: 2025-03-04 17:21:29.841931, Logical Clock: 161
+2025-03-04 17:21:30,093 - RECEIVE - System Time: 2025-03-04 17:21:30.093433, Logical Clock: 162, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:30,345 - RECEIVE - System Time: 2025-03-04 17:21:30.344920, Logical Clock: 163, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:30,597 - INTERNAL - System Time: 2025-03-04 17:21:30.597112, Logical Clock: 164
+2025-03-04 17:21:30,853 - SEND - System Time: 2025-03-04 17:21:30.852788, Logical Clock: 165, To: Machine on port 10001
+2025-03-04 17:21:31,106 - RECEIVE - System Time: 2025-03-04 17:21:31.105963, Logical Clock: 166, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:31,358 - INTERNAL - System Time: 2025-03-04 17:21:31.358209, Logical Clock: 167
+2025-03-04 17:21:31,611 - RECEIVE - System Time: 2025-03-04 17:21:31.611256, Logical Clock: 168, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:31,864 - SEND - System Time: 2025-03-04 17:21:31.864556, Logical Clock: 169, To: Machine on port 10000
+2025-03-04 17:21:31,865 - SEND - System Time: 2025-03-04 17:21:31.864556, Logical Clock: 169, To: Machine on port 10001
+2025-03-04 17:21:32,121 - INTERNAL - System Time: 2025-03-04 17:21:32.120918, Logical Clock: 170
+2025-03-04 17:21:32,372 - RECEIVE - System Time: 2025-03-04 17:21:32.372677, Logical Clock: 171, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:32,627 - RECEIVE - System Time: 2025-03-04 17:21:32.627012, Logical Clock: 172, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:32,878 - SEND - System Time: 2025-03-04 17:21:32.878171, Logical Clock: 173, To: Machine on port 10000
+2025-03-04 17:21:33,130 - RECEIVE - System Time: 2025-03-04 17:21:33.130420, Logical Clock: 174, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:33,386 - SEND - System Time: 2025-03-04 17:21:33.386192, Logical Clock: 175, To: Machine on port 10000
+2025-03-04 17:21:33,387 - SEND - System Time: 2025-03-04 17:21:33.386192, Logical Clock: 175, To: Machine on port 10001
+2025-03-04 17:21:33,637 - INTERNAL - System Time: 2025-03-04 17:21:33.637789, Logical Clock: 176
+2025-03-04 17:21:33,891 - INTERNAL - System Time: 2025-03-04 17:21:33.890837, Logical Clock: 177
+2025-03-04 17:21:34,149 - RECEIVE - System Time: 2025-03-04 17:21:34.149247, Logical Clock: 178, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:34,404 - INTERNAL - System Time: 2025-03-04 17:21:34.404262, Logical Clock: 179
+2025-03-04 17:21:34,660 - INTERNAL - System Time: 2025-03-04 17:21:34.659946, Logical Clock: 180
+2025-03-04 17:21:34,910 - SEND - System Time: 2025-03-04 17:21:34.910615, Logical Clock: 181, To: Machine on port 10000
+2025-03-04 17:21:35,166 - RECEIVE - System Time: 2025-03-04 17:21:35.166008, Logical Clock: 182, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:35,420 - INTERNAL - System Time: 2025-03-04 17:21:35.419867, Logical Clock: 183
+2025-03-04 17:21:35,673 - INTERNAL - System Time: 2025-03-04 17:21:35.673720, Logical Clock: 184
+2025-03-04 17:21:35,925 - SEND - System Time: 2025-03-04 17:21:35.925628, Logical Clock: 185, To: Machine on port 10001
+2025-03-04 17:21:36,180 - INTERNAL - System Time: 2025-03-04 17:21:36.180596, Logical Clock: 186
+2025-03-04 17:21:36,436 - SEND - System Time: 2025-03-04 17:21:36.436013, Logical Clock: 187, To: Machine on port 10001
+2025-03-04 17:21:36,691 - SEND - System Time: 2025-03-04 17:21:36.691506, Logical Clock: 188, To: Machine on port 10000
+2025-03-04 17:21:36,692 - SEND - System Time: 2025-03-04 17:21:36.691506, Logical Clock: 188, To: Machine on port 10001
+2025-03-04 17:21:36,945 - RECEIVE - System Time: 2025-03-04 17:21:36.945862, Logical Clock: 189, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:37,201 - INTERNAL - System Time: 2025-03-04 17:21:37.201123, Logical Clock: 190
+2025-03-04 17:21:37,457 - SEND - System Time: 2025-03-04 17:21:37.456862, Logical Clock: 191, To: Machine on port 10000
+2025-03-04 17:21:37,458 - SEND - System Time: 2025-03-04 17:21:37.456862, Logical Clock: 191, To: Machine on port 10001
+2025-03-04 17:21:37,709 - RECEIVE - System Time: 2025-03-04 17:21:37.709610, Logical Clock: 192, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:37,961 - INTERNAL - System Time: 2025-03-04 17:21:37.961519, Logical Clock: 193
+2025-03-04 17:21:38,213 - INTERNAL - System Time: 2025-03-04 17:21:38.213415, Logical Clock: 194
+2025-03-04 17:21:38,465 - INTERNAL - System Time: 2025-03-04 17:21:38.465543, Logical Clock: 195
+2025-03-04 17:21:38,716 - INTERNAL - System Time: 2025-03-04 17:21:38.716124, Logical Clock: 196
+2025-03-04 17:21:38,971 - INTERNAL - System Time: 2025-03-04 17:21:38.971349, Logical Clock: 197
+2025-03-04 17:21:39,227 - SEND - System Time: 2025-03-04 17:21:39.226819, Logical Clock: 198, To: Machine on port 10000
+2025-03-04 17:21:39,227 - SEND - System Time: 2025-03-04 17:21:39.226819, Logical Clock: 198, To: Machine on port 10001
+2025-03-04 17:21:39,478 - RECEIVE - System Time: 2025-03-04 17:21:39.478424, Logical Clock: 199, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:39,731 - RECEIVE - System Time: 2025-03-04 17:21:39.731115, Logical Clock: 200, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:39,986 - INTERNAL - System Time: 2025-03-04 17:21:39.985751, Logical Clock: 201
+2025-03-04 17:21:40,241 - RECEIVE - System Time: 2025-03-04 17:21:40.241307, Logical Clock: 202, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:40,492 - INTERNAL - System Time: 2025-03-04 17:21:40.492388, Logical Clock: 203
+2025-03-04 17:21:40,747 - RECEIVE - System Time: 2025-03-04 17:21:40.747019, Logical Clock: 204, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:41,000 - SEND - System Time: 2025-03-04 17:21:41.000016, Logical Clock: 205, To: Machine on port 10000
+2025-03-04 17:21:41,252 - INTERNAL - System Time: 2025-03-04 17:21:41.252182, Logical Clock: 206
+2025-03-04 17:21:41,508 - INTERNAL - System Time: 2025-03-04 17:21:41.507746, Logical Clock: 207
+2025-03-04 17:21:41,761 - INTERNAL - System Time: 2025-03-04 17:21:41.760060, Logical Clock: 208
+2025-03-04 17:21:42,017 - INTERNAL - System Time: 2025-03-04 17:21:42.017067, Logical Clock: 209
+2025-03-04 17:21:42,270 - INTERNAL - System Time: 2025-03-04 17:21:42.270718, Logical Clock: 210
+2025-03-04 17:21:42,524 - RECEIVE - System Time: 2025-03-04 17:21:42.524363, Logical Clock: 211, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:42,775 - INTERNAL - System Time: 2025-03-04 17:21:42.775622, Logical Clock: 212
+2025-03-04 17:21:43,031 - SEND - System Time: 2025-03-04 17:21:43.031224, Logical Clock: 213, To: Machine on port 10000
+2025-03-04 17:21:43,031 - SEND - System Time: 2025-03-04 17:21:43.031224, Logical Clock: 213, To: Machine on port 10001
+2025-03-04 17:21:43,284 - RECEIVE - System Time: 2025-03-04 17:21:43.284728, Logical Clock: 214, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:43,538 - INTERNAL - System Time: 2025-03-04 17:21:43.537980, Logical Clock: 215
+2025-03-04 17:21:43,792 - INTERNAL - System Time: 2025-03-04 17:21:43.792021, Logical Clock: 216
+2025-03-04 17:21:44,046 - INTERNAL - System Time: 2025-03-04 17:21:44.046349, Logical Clock: 217
+2025-03-04 17:21:44,300 - RECEIVE - System Time: 2025-03-04 17:21:44.300699, Logical Clock: 218, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:44,554 - RECEIVE - System Time: 2025-03-04 17:21:44.553849, Logical Clock: 219, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:44,805 - RECEIVE - System Time: 2025-03-04 17:21:44.805371, Logical Clock: 220, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:45,059 - SEND - System Time: 2025-03-04 17:21:45.058642, Logical Clock: 221, To: Machine on port 10000
+2025-03-04 17:21:45,059 - SEND - System Time: 2025-03-04 17:21:45.058642, Logical Clock: 221, To: Machine on port 10001
+2025-03-04 17:21:45,313 - RECEIVE - System Time: 2025-03-04 17:21:45.313432, Logical Clock: 222, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:45,566 - INTERNAL - System Time: 2025-03-04 17:21:45.566280, Logical Clock: 223
+2025-03-04 17:21:45,819 - RECEIVE - System Time: 2025-03-04 17:21:45.818827, Logical Clock: 224, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:46,078 - RECEIVE - System Time: 2025-03-04 17:21:46.078094, Logical Clock: 225, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:46,335 - SEND - System Time: 2025-03-04 17:21:46.335573, Logical Clock: 226, To: Machine on port 10000
+2025-03-04 17:21:46,590 - INTERNAL - System Time: 2025-03-04 17:21:46.590444, Logical Clock: 227
+2025-03-04 17:21:46,846 - INTERNAL - System Time: 2025-03-04 17:21:46.845888, Logical Clock: 228
+2025-03-04 17:21:47,097 - RECEIVE - System Time: 2025-03-04 17:21:47.097211, Logical Clock: 229, Queue Length: 0, From: Machine 1
+2025-03-04 17:21:47,350 - INTERNAL - System Time: 2025-03-04 17:21:47.350474, Logical Clock: 230
+2025-03-04 17:21:47,611 - RECEIVE - System Time: 2025-03-04 17:21:47.611493, Logical Clock: 231, Queue Length: 0, From: Machine 2
+2025-03-04 17:21:47,866 - SEND - System Time: 2025-03-04 17:21:47.865956, Logical Clock: 232, To: Machine on port 10001
+2025-03-04 17:21:48,118 - INTERNAL - System Time: 2025-03-04 17:21:48.117833, Logical Clock: 233
+2025-03-04 17:21:48,373 - INTERNAL - System Time: 2025-03-04 17:21:48.373445, Logical Clock: 234
+2025-03-04 17:21:48,629 - SEND - System Time: 2025-03-04 17:21:48.629020, Logical Clock: 235, To: Machine on port 10000
+2025-03-04 17:21:48,629 - SEND - System Time: 2025-03-04 17:21:48.629020, Logical Clock: 235, To: Machine on port 10001
+2025-03-04 17:21:48,885 - SEND - System Time: 2025-03-04 17:21:48.885488, Logical Clock: 236, To: Machine on port 10000
+2025-03-04 17:21:48,886 - SEND - System Time: 2025-03-04 17:21:48.885488, Logical Clock: 236, To: Machine on port 10001
+2025-03-04 17:21:49,159 - SEND - System Time: 2025-03-04 17:21:49.159580, Logical Clock: 237, To: Machine on port 10000

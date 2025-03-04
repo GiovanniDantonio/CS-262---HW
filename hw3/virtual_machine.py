@@ -113,6 +113,12 @@ class VirtualMachine:
                     peer_socket.sendall(str(self.port).encode('utf-8'))
                     self.peer_connections[peer_port] = peer_socket
                     self.logger.info(f"Connected to peer on port {peer_port}")
+
+                    threading.Thread(
+                    target=self.receive_messages,
+                    args=(peer_socket,),
+                    daemon=True
+                    ).start()
                     break
                 except ConnectionRefusedError:
                     peer_socket.close()
@@ -220,22 +226,19 @@ class VirtualMachine:
         Returns:
             int: Target peer's port to send the message to.
         """
+        sorted_ports = sorted(self.peer_ports + [self.port])
+    
+        # Determine your machine number based on your port's position (1-indexed)
+        my_index = sorted_ports.index(self.port) + 1
+
         mapping_clockwise = {1: 2, 2: 3, 3: 1}
         mapping_counterclockwise = {1: 3, 2: 1, 3: 2}
 
-        target_machine_id = (
-            mapping_clockwise[self.machine_id] if clockwise else mapping_counterclockwise[self.machine_id]
-        )
-
-        # Assuming ports are sequential and machine_id corresponds to the port index
-        machine_ports = {1: self.port, 2: None, 3: None}
-        sorted_ports = sorted(self.peer_ports + [self.port])
-
-        # Map machine IDs to sorted ports
-        for idx, port in enumerate(sorted_ports, start=1):
-            machine_ports[idx] = port
-
-        return machine_ports.get(target_machine_id)
+        # Determine the target index based on the direction
+        target_index = mapping_clockwise[my_index] if clockwise else mapping_counterclockwise[my_index]
+        
+        # Return the port corresponding to the target index (convert back to 0-indexed)
+        return sorted_ports[target_index - 1]
 
     def process_event(self):
         """

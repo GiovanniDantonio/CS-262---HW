@@ -64,17 +64,17 @@ def run_experiment(duration=60):
         },
         {
             'name': 'smaller_clock_variation',
-            'description': 'Smaller variation in clock cycles (3-4 ticks/sec)',
+            'description': 'Smaller variation in clock cycles',
             'clock_min': 3,
             'clock_max': 4,
             'internal_prob': 0.8
         },
         {
             'name': 'smaller_internal_prob',
-            'description': 'Smaller probability of internal events (0.4)',
+            'description': 'Smaller probability of internal events',
             'clock_min': 1,
             'clock_max': 6,
-            'internal_prob': 0.4
+            'internal_prob': 0.1
         },
         {
             'name': 'both_modifications',

@@ -56,3 +56,20 @@ Both experiment scripts generate detailed analysis with:
 - Comparative analysis across runs/configurations
 - Visualizations for each run/configuration
 - Areas for adding reflections on the results
+
+## Design Decisions
+
+### System Architecture
+- We decided to implement each virtual machine as a separate process using Python's `multiprocessing` module. We did this since, per Jared's Ed Post, ``the point is to model a distributed system with machines that have different clock rates, and that it doesn't make much sense for them to have shared memory if they're just communicating with each other, using processes probably makes more sense.''
+- Communication between machines is done using sockets
+- Each machine maintains its own message queue and logical clock
+
+### Logical Clock Implementation
+- Increment on internal events
+- On send: increment then send
+- On receive: set to max(local_clock, received_clock) + 1
+
+### Random Event Generation
+- Each machine generates events randomly on each clock cycle:
+  - Values 1-3: Send messages to other machines
+  - Values 4-10: Internal events
