@@ -222,6 +222,7 @@ class VirtualMachine:
                 f"Queue Length: {queue_length}, From: Machine {sender_id}"
             )
         else:
+            sorted_peers = sorted(self.peer_ports)
             # Generate random event (1-10)
             event = random.randint(1, 10)
             
