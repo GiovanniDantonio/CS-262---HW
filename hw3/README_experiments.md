@@ -5,7 +5,7 @@ This directory contains scripts for running experiments on the distributed syste
 ## Available Scripts
 
 ### 1. run_demo.py
-The main demo script that runs a single simulation and generates visualizations and statistics.
+The demo script that runs a single simulation and generates visualizations and statistics.
 - Creates logical clock plots
 - Creates queue length plots
 - Creates event distribution charts
@@ -58,5 +58,3 @@ Both experiment scripts generate detailed lab notebooks with:
 - Comparative analysis across runs/configurations
 - Visualizations for each run/configuration
 - Areas for adding reflections on the results
-
-The lab notebooks are designed to support detailed analysis of Lamport's logical clocks in distributed systems with different parameters.
