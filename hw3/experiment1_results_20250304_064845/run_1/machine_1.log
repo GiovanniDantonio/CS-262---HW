@@ -1,7 +1,0 @@
-2025-03-04 06:48:46,120 - Virtual Machine 1 initialized
-2025-03-04 06:48:46,120 - Clock Rate: 5 ticks/second
-2025-03-04 06:48:46,120 - Listening on port: 10000
-2025-03-04 06:48:46,120 - Peer ports: [10001, 10002]
-2025-03-04 06:48:47,122 - Connected to peer on port 10001
-2025-03-04 06:48:47,310 - Stopping virtual machine
-2025-03-04 06:48:47,310 - Closed connection to port 10001

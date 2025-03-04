@@ -7,7 +7,7 @@ It simulates multiple machines running at different speeds on a single physical 
 
 - Each virtual machine runs at a random clock rate (1-6 ticks per second)
 - Machines communicate via sockets
-- Each machine implements a logical clock following Lamport's rules
+- Each machine implements a logical clock
 - Events include:
   - Internal events
   - Sending messages to one other machine
