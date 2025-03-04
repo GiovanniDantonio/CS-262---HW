@@ -78,7 +78,8 @@ class VirtualMachine:
         """
         if self.initialized:
             return
-            
+        
+        self.running = True
         # Create and configure server socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -106,13 +107,15 @@ class VirtualMachine:
             retry_count = 0
             
             while retry_count < max_retries:
+                peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 try:
-                    peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     peer_socket.connect(('localhost', peer_port))
+                    peer_socket.sendall(str(self.port).encode('utf-8'))
                     self.peer_connections[peer_port] = peer_socket
                     self.logger.info(f"Connected to peer on port {peer_port}")
                     break
                 except ConnectionRefusedError:
+                    peer_socket.close()
                     retry_count += 1
                     time.sleep(1)  # Wait before retrying
                     
@@ -127,8 +130,17 @@ class VirtualMachine:
         while self.running:
             try:
                 client_socket, addr = self.server_socket.accept()
-                client_port = addr[1]
-                self.peer_connections[client_port] = client_socket
+                data = client_socket.recv(1024)
+                if not data:
+                    client_socket.close()
+                    continue
+                try:
+                    remote_listening_port = int(data.decode('utf-8').strip())
+                except ValueError:
+                    self.logger.error(f"Invalid identification from {addr}")
+                    client_socket.close()
+                    continue
+                self.peer_connections[remote_listening_port] = client_socket
                 self.logger.info(f"Accepted connection from {addr}")
                 
                 # Start a thread to receive messages from this client
@@ -251,15 +263,22 @@ class VirtualMachine:
         else:
             event = random.randint(1, 10)
             system_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-
-            if event == 1:
-                target_port = self.get_cycle_target(clockwise=True)
-                if target_port:
-                    self.send_message([target_port])
-            elif event == 2:
-                target_port = self.get_cycle_target(clockwise=False)
-                if target_port:
-                    self.send_message([target_port])
+            if self.peer_ports:
+                if event == 1:
+                    target_port = self.get_cycle_target(clockwise=True)
+                    if target_port:
+                        self.send_message([target_port])
+                elif event == 2:
+                    target_port = self.get_cycle_target(clockwise=False)
+                    if target_port:
+                        self.send_message([target_port])
+                elif event == 3:
+                    # Send to all peers
+                    if self.peer_ports:
+                        self.send_message(self.peer_ports)
+                else:
+                    self.logical_clock += 1
+                    self.logger.info(f"INTERNAL - System Time: {system_time}, Logical Clock: {self.logical_clock}")
             else:
                 # Internal event
                 self.logical_clock += 1

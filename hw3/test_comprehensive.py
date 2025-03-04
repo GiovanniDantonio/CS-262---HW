@@ -2,7 +2,7 @@
 """
 Comprehensive test suite for the distributed system simulation.
 This test suite verifies all aspects of the implementation to ensure it meets
-the assignment requirements for the highest grade.
+the assignment requirements.
 """
 
 import unittest
@@ -327,7 +327,7 @@ class TestSpecificationCompliance(unittest.TestCase):
         initial_clock = vm.logical_clock
         
         # Force an internal event (event 4-10)
-        with patch('random.randint', return_value=4):
+        with patch('virtual_machine.random.randint', return_value=4):
             vm.process_event()  # This should trigger an internal event
             self.assertEqual(vm.logical_clock, initial_clock + 1)
         

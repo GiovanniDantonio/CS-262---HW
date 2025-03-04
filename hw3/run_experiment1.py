@@ -18,7 +18,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import main
+import main as simulation
 import analyze_logs
 import re
 from run_demo import create_clock_rate_comparison, write_summary_statistics, ensure_directory_exists
@@ -71,7 +71,7 @@ def run_experiment(num_runs=5, duration=60):
         print(f"Running simulation for {duration} seconds...")
         orig_argv = sys.argv
         sys.argv = ["main.py", "--duration", str(duration)]
-        main.main()
+        simulation.main()
         sys.argv = orig_argv
         
         # Analyze logs
@@ -274,6 +274,9 @@ def parse_arguments():
     parser.add_argument("--duration", type=int, default=60, help="Duration of each run in seconds")
     return parser.parse_args()
 
-if __name__ == "__main__":
+def main():
     args = parse_arguments()
     run_experiment(num_runs=args.runs, duration=args.duration)
+
+if __name__ == "__main__":
+    main()

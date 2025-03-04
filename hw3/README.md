@@ -1,7 +1,6 @@
 # Distributed System Model with Logical Clocks
 
-This project implements a model of a small, asynchronous distributed system with logical clocks. 
-It simulates multiple machines running at different speeds on a single physical machine.
+This project implements a model of a small, asynchronous distributed system with logical clocks. It simulates multiple machines running at different speeds on a single physical machine.
 
 ## Overview
 
