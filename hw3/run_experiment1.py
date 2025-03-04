@@ -266,16 +266,6 @@ def generate_cross_run_analysis(all_runs_data, exp_dir, notebook_path):
                 f.write("| " + " | ".join(row) + " |\n")
         
         f.write("\n")
-        
-        # Add summary reflections section for the user to fill in
-        f.write("## Summary Reflections\n\n")
-        f.write("*This section should be filled in with reflections on the experimental results.*\n\n")
-        f.write("Consider addressing these questions:\n\n")
-        f.write("1. How large were the jumps in the logical clock values, and what factors affected them?\n")
-        f.write("2. How significant was the drift between machines' logical clocks?\n")
-        f.write("3. What impact did different clock rates have on queue lengths?\n")
-        f.write("4. Were there any unexpected patterns or behaviors observed?\n")
-        f.write("5. How do the observations relate to the theoretical concepts of logical clocks?\n\n")
 
 def parse_arguments():
     """Parse command-line arguments."""
