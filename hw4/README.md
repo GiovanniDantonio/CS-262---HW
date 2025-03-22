@@ -50,16 +50,23 @@ hw4/
 ### Installation
 
 1. Clone the repository
-2. Install dependencies:
+2. Create a virtual environment and activate it:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Generate gRPC code from protocol buffers:
+3. Make sure you are already cded in the hw4 folder and then generate gRPC code from protocol buffers:
 
 ```bash
-python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. hw4/proto/chat.proto
+python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.proto
 ```
 
 ### Running a Server Cluster
@@ -67,20 +74,20 @@ python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. hw4/proto/cha
 1. Start the first server (as the leader):
 
 ```bash
-python hw4/server/run_server.py --id server1 --port 8001 --data-dir ./data/server1
+python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1
 ```
 
 2. Start additional servers (joining the leader):
 
 ```bash
-python hw4/server/run_server.py --id server2 --port 8002 --data-dir ./data/server2 --join localhost:8001
-python hw4/server/run_server.py --id server3 --port 8003 --data-dir ./data/server3 --join localhost:8001
+python server/run_server.py --id server2 --port 8002 --data-dir ./data/server2 --join localhost:8001
+python server/run_server.py --id server3 --port 8003 --data-dir ./data/server3 --join localhost:8001
 ```
 
 Alternatively, you can use a configuration file:
 
 ```bash
-python hw4/server/run_server.py --id server1 --port 8001 --data-dir ./data/server1 --config-file cluster_config.json
+python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1 --config-file cluster_config.json
 ```
 
 Where `cluster_config.json` contains:
@@ -100,7 +107,7 @@ Where `cluster_config.json` contains:
 Connect to the server cluster:
 
 ```bash
-python hw4/client/cli_client.py --servers localhost:8001,localhost:8002,localhost:8003
+python client/cli_client.py --servers localhost:8001,localhost:8002,localhost:8003
 ```
 
 The CLI supports commands like:
@@ -148,7 +155,7 @@ The system can handle:
 Execute the unit tests:
 
 ```bash
-python -m unittest discover hw4/tests
+python -m unittest discover tests
 ```
 
 ## Implementation Notes
