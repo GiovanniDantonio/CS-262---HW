@@ -1,0 +1,7 @@
+{
+    "servers": {
+    "server1": "localhost:8001",
+    "server2": "localhost:8002",
+    "server3": "localhost:8003"
+  }
+}
