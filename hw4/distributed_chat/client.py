@@ -510,9 +510,18 @@ class ChatClient:
         )
         
         if response:
-            self.user_listbox.delete(0, tk.END)
-            for account in response.accounts:
-                self.user_listbox.insert(tk.END, account.username)
+            try:
+                self.user_listbox.delete(0, tk.END)
+                for account in response.accounts:
+                    # Add an indicator for online users
+                    display_name = f"{account.username} [ONLINE]" if hasattr(account, 'online') and account.online else account.username
+                    self.user_listbox.insert(tk.END, display_name)
+                
+                # Update status to show successful retrieval
+                self.status_var.set(f"Retrieved {len(response.accounts)} accounts. Connected to {self.client.current_server}")
+            except Exception as e:
+                logger.error(f"Error processing account list: {e}")
+                messagebox.showerror("Error", f"Failed to process account list: {e}")
         else:
             messagebox.showerror("Error", "Failed to retrieve account list.")
         
