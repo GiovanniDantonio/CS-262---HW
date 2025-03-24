@@ -436,24 +436,57 @@ class ChatService(pb2_grpc.ChatServiceServicer):
             conn = sqlite3.connect(self.node.db_path)
             c = conn.cursor()
             
+            # First, ensure the online_status column exists
+            try:
+                c.execute("SELECT online_status FROM accounts LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                c.execute("ALTER TABLE accounts ADD COLUMN online_status INTEGER DEFAULT 0")
+                conn.commit()
+            
+            # Get list of all active streams from all nodes to determine who's online
+            online_users = set()
+            
+            # Add users from local active streams
+            with self.stream_lock:
+                for username in self.active_streams:
+                    online_users.add(username)
+            
+            # Update online status in the database
+            for username in online_users:
+                c.execute("UPDATE accounts SET online_status = 1 WHERE username = ?", (username,))
+            
+            # Set users not in the online_users set as offline
+            placeholders = ','.join('?' for _ in online_users) if online_users else "''"
+            online_list = list(online_users) if online_users else []
+            if online_users:
+                c.execute(f"UPDATE accounts SET online_status = 0 WHERE username NOT IN ({placeholders})", online_list)
+            else:
+                c.execute("UPDATE accounts SET online_status = 0")
+            
+            conn.commit()
+            
+            # Now query accounts with online status
             pattern = request.pattern if request.pattern else "%"
             page = request.page if request.page > 0 else 1
             per_page = request.per_page if request.per_page > 0 else 10
             offset = (page - 1) * per_page
             
             c.execute(
-                "SELECT username, created_at, last_login FROM accounts WHERE username LIKE ? ORDER BY username LIMIT ? OFFSET ?",
+                "SELECT username, created_at, last_login, online_status FROM accounts WHERE username LIKE ? ORDER BY online_status DESC, username LIMIT ? OFFSET ?",
                 (pattern, per_page, offset)
             )
             
             rows = c.fetchall()
             accounts = []
             for row in rows:
-                accounts.append(pb2.Account(
+                account = pb2.Account(
                     username=row[0],
                     created_at=row[1] if row[1] is not None else "",
-                    last_login=row[2] if row[2] is not None else ""
-                ))
+                    last_login=row[2] if row[2] is not None else "",
+                    online=(row[3] == 1)  # Convert integer to boolean
+                )
+                accounts.append(account)
             
             conn.close()
             
