@@ -1,0 +1,36 @@
+# Distributed Chat System Configuration
+
+# Node configurations
+nodes:
+  - id: "1"
+    host: "localhost"
+    port: 50051
+    db_path: "node_1.db"
+  
+  - id: "2"
+    host: "localhost"
+    port: 50052
+    db_path: "node_2.db"
+  
+  - id: "3"
+    host: "localhost"
+    port: 50053
+    db_path: "node_3.db"
+
+# For running on multiple machines, update the host addresses
+# Example for multi-machine setup:
+# nodes:
+#   - id: "1"
+#     host: "machine1.example.com"  # Machine 1's hostname or IP
+#     port: 50051
+#     db_path: "node_1.db"
+#   
+#   - id: "2"
+#     host: "machine2.example.com"  # Machine 2's hostname or IP
+#     port: 50051
+#     db_path: "node_1.db"
+#
+#   - id: "3"
+#     host: "localhost"             # Local machine as third node
+#     port: 50051
+#     db_path: "node_1.db"
