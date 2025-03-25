@@ -166,162 +166,363 @@ class ChatNode:
         Start background threads for election timeout and leader heartbeat.
         """
         # Start election timer
-        self.election_timer = threading.Thread(target=self._run_election_timer)
+        self.election_timer = threading.Thread(target=self._heartbeat_loop)
         self.election_timer.daemon = True
         self.election_timer.start()
         
         # If leader, start heartbeat timer
-        self.heartbeat_timer = threading.Thread(target=self._run_heartbeat_timer)
+        self.heartbeat_timer = threading.Thread(target=self._heartbeat_loop)
         self.heartbeat_timer.daemon = True
         self.heartbeat_timer.start()
     
-    def _run_election_timer(self):
+    def _heartbeat_loop(self):
         """
-        Background thread that monitors election timeout and starts election if needed.
-        """
-        while True:
-            with self.node_lock:
-                # Only followers and candidates time out and start elections
-                if self.state != LEADER:
-                    elapsed = time.time() - self.last_heartbeat
-                    if elapsed > self.election_timeout:
-                        logger.info(f"Election timeout ({elapsed:.2f}s). Starting election.")
-                        self._start_election()
-            
-            # Check every 50ms
-            time.sleep(0.05)
-    
-    def _run_heartbeat_timer(self):
-        """
-        Background thread that sends heartbeats if this node is the leader.
+        Main heartbeat loop that handles leader election and leader heartbeats.
+        This is the core of the Raft consensus algorithm implementation.
         """
         while True:
-            with self.node_lock:
-                if self.state == LEADER:
-                    self._send_heartbeats()
-            
-            # Send heartbeats every 100ms
-            time.sleep(0.1)
+            try:
+                time.sleep(0.05)  # Check state every 50ms
+                
+                with self.node_lock:
+                    current_time = time.time()
+                    
+                    # If leader, send heartbeats
+                    if self.state == LEADER:
+                        if current_time - self.last_heartbeat >= 0.05:  # Send heartbeat every 50ms
+                            self._send_heartbeats()
+                            self.last_heartbeat = current_time
+                            
+                    # If follower or candidate, check for election timeout
+                    else:
+                        if current_time - self.last_heartbeat > self.election_timeout:
+                            logger.info(f"Election timeout triggered for node {self.node_id}")
+                            # Transition to candidate and start election
+                            self._start_election()
+            except Exception as e:
+                logger.error(f"Error in heartbeat loop: {e}")
+                # Continue running even if there's an error
     
     def _start_election(self):
         """
-        Start a new election by transitioning to CANDIDATE state
-        and requesting votes from peers.
+        Start an election by incrementing term, voting for self, and requesting votes.
         """
         with self.node_lock:
-            # Increment current term and vote for self
+            # Become a candidate
+            self.state = CANDIDATE
             self.current_term += 1
             self.voted_for = self.node_id
-            self.state = CANDIDATE
-            
-            # Reset election timeout
-            self.last_heartbeat = time.time()
-            self.election_timeout = self._random_timeout()
-            
-            logger.info(f"Node {self.node_id} started election for term {self.current_term}")
-            
-            # Request votes from all peers
+            self.leader_id = None
             votes_received = 1  # Vote for self
             
-            # Send RequestVote RPCs to all peers
-            for peer_id, peer_addr in self.peers.items():
-                try:
-                    # Get last log index and term
-                    last_log_index = len(self.log)
-                    last_log_term = self.log[-1]['term'] if self.log else 0
-                    
-                    # Create gRPC channel to peer
-                    channel = grpc.insecure_channel(peer_addr)
-                    stub = pb2_grpc.ReplicationServiceStub(channel)
-                    
-                    # Create vote request
-                    request = pb2.VoteRequest(
-                        term=self.current_term,
+            logger.info(f"Starting election for term {self.current_term}")
+            
+            # Reset election timeout
+            self.election_timeout = self._random_timeout()
+            self.last_heartbeat = time.time()
+            
+            # Request votes from all peers
+            for peer_id, peer_address in self.peers.items():
+                if peer_id == self.node_id:
+                    continue
+                
+                # Send vote request in a separate thread to avoid blocking
+                threading.Thread(
+                    target=self._request_vote_from_peer,
+                    args=(peer_id, peer_address, self.current_term, votes_received),
+                    daemon=True
+                ).start()
+    
+    def _request_vote_from_peer(self, peer_id, peer_address, term, votes_received):
+        """
+        Request vote from a single peer in a background thread.
+        
+        Args:
+            peer_id: ID of the peer to request vote from
+            peer_address: Address of the peer
+            term: Current term
+            votes_received: Shared votes counter
+        """
+        try:
+            with grpc.insecure_channel(peer_address) as channel:
+                stub = pb2_grpc.ReplicationServiceStub(channel)
+                
+                # Prepare vote request
+                last_log_index = len(self.log)
+                last_log_term = self.log[-1]['term'] if self.log else 0
+                
+                # Request vote
+                response = stub.RequestVote(
+                    pb2.VoteRequest(
+                        term=term,
                         candidate_id=self.node_id,
                         last_log_index=last_log_index,
                         last_log_term=last_log_term
                     )
+                )
+                
+                # Process response
+                with self.node_lock:
+                    # If no longer a candidate or term changed, ignore response
+                    if self.state != CANDIDATE or self.current_term != term:
+                        return
                     
-                    # Send request with timeout
-                    response = stub.RequestVote(request, timeout=0.1)
-                    
-                    logger.debug(f"Received vote response from {peer_id}: {response}")
-                    
-                    # If response term is higher, revert to follower
+                    # If received a higher term, convert to follower
                     if response.term > self.current_term:
                         self.current_term = response.term
                         self.state = FOLLOWER
                         self.voted_for = None
+                        self.last_heartbeat = time.time()
                         return
                     
-                    # Count vote if granted
+                    # If vote granted, increment vote count
                     if response.vote_granted:
                         votes_received += 1
-                
-                except Exception as e:
-                    logger.warning(f"Error requesting vote from {peer_id}: {e}")
-            
-            # If received votes from majority of servers, become leader
-            if votes_received > (len(self.peers) + 1) / 2:
-                self._become_leader()
+                        logger.info(f"Received vote from node {peer_id}, total votes: {votes_received}")
+                        
+                        # Check if we have a majority
+                        if votes_received > len(self.peers) / 2:
+                            logger.info(f"Node {self.node_id} won election for term {self.current_term}")
+                            # Become leader
+                            self._become_leader()
+        except Exception as e:
+            logger.error(f"Error requesting vote from {peer_id}: {e}")
     
     def _become_leader(self):
         """
         Transition to leader state and initialize leader state.
         """
         with self.node_lock:
-            logger.info(f"Node {self.node_id} becoming leader for term {self.current_term}")
+            if self.state != CANDIDATE:
+                return
+                
             self.state = LEADER
             self.leader_id = self.node_id
+            logger.info(f"Node {self.node_id} becoming leader for term {self.current_term}")
             
             # Initialize leader state
             for peer_id in self.peers:
-                self.next_index[peer_id] = len(self.log) + 1
-                self.match_index[peer_id] = 0
+                if peer_id != self.node_id:
+                    self.next_index[peer_id] = len(self.log) + 1
+                    self.match_index[peer_id] = 0
             
-            # Send initial heartbeats
+            # Send immediate heartbeat to establish authority
             self._send_heartbeats()
+            self.last_heartbeat = time.time()
+            
+            # Persist state
+            self._persist_state()
     
     def _send_heartbeats(self):
         """
-        Send heartbeats (AppendEntries with no entries) to all peers.
+        Send heartbeats (empty AppendEntries RPCs) to all peers to maintain authority.
         """
-        logger.debug(f"Sending heartbeats for term {self.current_term}")
+        for peer_id, peer_address in self.peers.items():
+            if peer_id == self.node_id:
+                continue
+                
+            # Send heartbeat in background thread
+            threading.Thread(
+                target=self._send_append_entries,
+                args=(peer_id, peer_address, []),  # Empty entries for heartbeat
+                daemon=True
+            ).start()
+    
+    def _send_append_entries(self, peer_id, peer_address, entries):
+        """
+        Send AppendEntries RPC to a peer.
         
-        for peer_id, peer_addr in self.peers.items():
-            try:
-                # Create gRPC channel to peer
-                channel = grpc.insecure_channel(peer_addr)
+        Args:
+            peer_id: ID of the peer
+            peer_address: Address of the peer
+            entries: Log entries to send ([] for heartbeat)
+        """
+        try:
+            with grpc.insecure_channel(peer_address) as channel:
                 stub = pb2_grpc.ReplicationServiceStub(channel)
                 
-                # Get previous log info
-                prev_log_index = self.next_index[peer_id] - 1
-                prev_log_term = 0
-                if prev_log_index > 0 and prev_log_index <= len(self.log):
-                    prev_log_term = self.log[prev_log_index - 1]['term']
+                # Prepare request
+                with self.node_lock:
+                    # If no longer leader, stop sending
+                    if self.state != LEADER:
+                        return
+                        
+                    # Get next index for this peer
+                    next_idx = self.next_index.get(peer_id, len(self.log) + 1)
+                    
+                    # Find prev log index and term
+                    prev_log_index = next_idx - 1
+                    prev_log_term = 0
+                    if prev_log_index > 0 and prev_log_index <= len(self.log):
+                        prev_log_term = self.log[prev_log_index - 1]['term']
+                    
+                    # Create entries for this peer
+                    if not entries:  # Heartbeat
+                        log_entries = []
+                    else:
+                        log_entries = entries
+                    
+                    # Create AppendEntries request
+                    request = pb2.AppendEntriesRequest(
+                        term=self.current_term,
+                        leader_id=self.node_id,
+                        prev_log_index=prev_log_index,
+                        prev_log_term=prev_log_term,
+                        entries=json.dumps(log_entries),
+                        leader_commit=self.commit_index
+                    )
                 
-                # Create empty AppendEntries request (heartbeat)
-                request = pb2.AppendEntriesRequest(
-                    term=self.current_term,
-                    leader_id=self.node_id,
-                    prev_log_index=prev_log_index,
-                    prev_log_term=prev_log_term,
-                    entries=[],  # Empty for heartbeat
-                    leader_commit=self.commit_index
-                )
+                # Send request
+                response = stub.AppendEntries(request)
                 
-                # Send request with timeout
-                response = stub.AppendEntries(request, timeout=0.1)
-                
-                # If response term is higher, revert to follower
-                if response.term > self.current_term:
-                    self.current_term = response.term
-                    self.state = FOLLOWER
-                    self.voted_for = None
-                    return
-            
-            except Exception as e:
-                logger.warning(f"Error sending heartbeat to {peer_id}: {e}")
+                # Process response
+                with self.node_lock:
+                    # If no longer leader or term changed, stop processing
+                    if self.state != LEADER or self.current_term != request.term:
+                        return
+                    
+                    # If received higher term, become follower
+                    if response.term > self.current_term:
+                        self.current_term = response.term
+                        self.state = FOLLOWER
+                        self.voted_for = None
+                        self.leader_id = None
+                        self.last_heartbeat = time.time()
+                        return
+                    
+                    # If success, update next and match indices
+                    if response.success:
+                        if entries:  # Not just a heartbeat
+                            new_next_idx = prev_log_index + len(log_entries) + 1
+                            self.next_index[peer_id] = new_next_idx
+                            self.match_index[peer_id] = new_next_idx - 1
+                            
+                            # Check if we can advance commit index
+                            self._update_commit_index()
+                    else:
+                        # If failure due to log inconsistency, decrement next_index and retry
+                        if self.next_index[peer_id] > 1:
+                            self.next_index[peer_id] -= 1
+                            # Retry immediately
+                            self._send_append_entries(peer_id, peer_address, entries)
+        except Exception as e:
+            logger.error(f"Error sending AppendEntries to {peer_id}: {e}")
+            # Mark node as potentially down
+            # This helps with fault tolerance in case a node is unreachable
+            with self.node_lock:
+                if self.state == LEADER:
+                    logger.warning(f"Node {peer_id} appears to be down")
+                    # We'll continue trying in the next heartbeat cycle
     
-    # Additional methods for request handling and log replication will be added
-    # in the service implementation classes
+    def _update_commit_index(self):
+        """
+        Update the commit index based on the matched indices of all nodes.
+        This is called after successful AppendEntries responses.
+        """
+        with self.node_lock:
+            if self.state != LEADER:
+                return
+                
+            # Find the highest index that is replicated on a majority of nodes
+            for n in range(len(self.log), self.commit_index, -1):
+                # Count nodes that have this entry
+                count = 1  # Leader has it
+                for peer_id in self.peers:
+                    if peer_id != self.node_id and self.match_index.get(peer_id, 0) >= n:
+                        count += 1
+                
+                # If majority and entry is from current term, commit it
+                if count > len(self.peers) / 2 and self.log[n-1]['term'] == self.current_term:
+                    self.commit_index = n
+                    logger.info(f"Updated commit index to {n}")
+                    # Apply committed entries
+                    self._apply_committed_entries()
+                    break
+    
+    def _apply_committed_entries(self):
+        """
+        Apply all committed but not yet applied log entries to the state machine.
+        """
+        with self.node_lock:
+            while self.last_applied < self.commit_index:
+                self.last_applied += 1
+                entry = self.log[self.last_applied - 1]
+                
+                # Apply the command to the state machine
+                self._apply_log_entry(entry)
+                
+                logger.info(f"Applied log entry at index {self.last_applied}: {entry['command']}")
+    
+    def _apply_log_entry(self, entry):
+        """
+        Apply a single log entry to the state machine.
+        
+        Args:
+            entry: Log entry to apply
+        """
+        command = entry['command']
+        data = entry['data']
+        
+        with self.db_lock:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            
+            try:
+                if command == 'REGISTER':
+                    # Register a new user
+                    c.execute(
+                        "INSERT INTO accounts (username, password_hash) VALUES (?, ?)",
+                        (data['username'], data['password_hash'])
+                    )
+                    
+                elif command == 'SEND_MESSAGE':
+                    # Send a message
+                    c.execute(
+                        "INSERT INTO messages (sender, recipient, content, timestamp) VALUES (?, ?, ?, ?)",
+                        (data['sender'], data['recipient'], data['content'], data['timestamp'])
+                    )
+                    
+                elif command == 'DELETE_MESSAGE':
+                    # Delete a message
+                    c.execute(
+                        "DELETE FROM messages WHERE rowid = ?",
+                        (data['message_id'],)
+                    )
+                    
+                # Add other command handlers as needed
+                
+                conn.commit()
+            except Exception as e:
+                logger.error(f"Error applying log entry: {e}")
+                conn.rollback()
+            finally:
+                conn.close()
+                
+    def _recover_from_leader_failure(self):
+        """
+        Initiate recovery actions when leader appears to be down.
+        Called when AppendEntries timeout occurs multiple times.
+        """
+        with self.node_lock:
+            if self.state != FOLLOWER:
+                return
+                
+            logger.warning(f"Leader {self.leader_id} appears to be down, starting election")
+            # Start election to find a new leader
+            self._start_election()
+            
+    def _persist_state(self):
+        """
+        Persist critical state to disk to support crash recovery.
+        """
+        state = {
+            'current_term': self.current_term,
+            'voted_for': self.voted_for,
+            'log': self.log
+        }
+        
+        try:
+            with open(f"node_{self.node_id}_state.json", 'w') as f:
+                json.dump(state, f)
+        except Exception as e:
+            logger.error(f"Error persisting state: {e}")

@@ -49,84 +49,210 @@ class FaultTolerantClient:
         self.stub = None
         self.leader_info = {}  # Metadata about leader if redirected
         self.lock = threading.RLock()
+        self.last_connect_attempt = {}  # Track failed connection attempts
+        self.reconnect_backoff = 1.0  # Initial backoff time in seconds
+        self.max_backoff = 10.0  # Maximum backoff time
         
         # Connect to initial server
-        self._connect_to_server(self.current_server)
-    
-    def _connect_to_server(self, server_addr):
+        self.connect()
+
+    def connect(self, server=None):
         """
-        Connect to a specific server.
+        Connect to a server, either specified or the current one.
         
         Args:
-            server_addr: Server address in format "host:port"
+            server: Optional server address to connect to
             
         Returns:
-            bool: True if connection successful
+            bool: True if connection successful, False otherwise
         """
         with self.lock:
-            try:
-                if self.channel:
-                    self.channel.close()
+            if server:
+                self.current_server = server
                 
-                logger.info(f"Connecting to server at {server_addr}")
-                self.channel = grpc.insecure_channel(server_addr)
-                self.stub = pb2_grpc.ChatServiceStub(self.channel)
-                self.current_server = server_addr
-                return True
-            except Exception as e:
-                logger.error(f"Failed to connect to {server_addr}: {e}")
+            if not self.current_server:
+                logger.error("No server address provided")
                 return False
-    
+                
+            try:
+                # Close existing channel if any
+                if self.channel:
+                    try:
+                        self.channel.close()
+                    except Exception:
+                        pass
+                
+                logger.info(f"Connecting to server at {self.current_server}")
+                
+                # Create new connection with timeout
+                options = [
+                    ('grpc.max_send_message_length', 10 * 1024 * 1024),
+                    ('grpc.max_receive_message_length', 10 * 1024 * 1024),
+                    ('grpc.keepalive_time_ms', 10000),  # Send keepalive ping every 10 seconds
+                    ('grpc.keepalive_timeout_ms', 5000),  # Keepalive ping timeout after 5 seconds
+                    ('grpc.keepalive_permit_without_calls', True),  # Allow keepalive pings when no calls are in-flight
+                    ('grpc.http2.max_pings_without_data', 0),  # Allow unlimited pings without data
+                    ('grpc.enable_retries', 1),  # Enable retries
+                ]
+                self.channel = grpc.insecure_channel(self.current_server, options=options)
+                
+                # Set a deadline for the connection attempt
+                grpc.channel_ready_future(self.channel).result(timeout=5)
+                
+                # Create stub for client-server communication
+                self.stub = pb2_grpc.ChatServiceStub(self.channel)
+                
+                # Reset backoff on successful connection
+                self.reconnect_backoff = 1.0
+                self.last_connect_attempt[self.current_server] = time.time()
+                
+                logger.info(f"Successfully connected to {self.current_server}")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Failed to connect to {self.current_server}: {e}")
+                
+                # Mark this server as recently failed
+                self.last_connect_attempt[self.current_server] = time.time()
+                
+                # Try to find another server
+                if not self._try_next_server():
+                    # If all servers failed, increase backoff time
+                    self.reconnect_backoff = min(self.reconnect_backoff * 1.5, self.max_backoff)
+                    logger.warning(f"All servers unavailable. Will retry in {self.reconnect_backoff} seconds")
+                
+                return False
+                
     def _try_next_server(self):
         """
-        Try to connect to the next server in the list.
+        Try to connect to another server in the list that hasn't failed recently.
         
         Returns:
-            bool: True if connection successful
+            bool: True if successfully connected to another server, False otherwise
         """
-        with self.lock:
-            # If we have leader info, try that first
-            if 'leader-addr' in self.leader_info:
-                leader_addr = self.leader_info['leader-addr']
-                if self._connect_to_server(leader_addr):
-                    return True
-            
-            # Try other servers in order
-            current_idx = self.server_list.index(self.current_server) if self.current_server in self.server_list else -1
-            for i in range(1, len(self.server_list) + 1):
-                idx = (current_idx + i) % len(self.server_list)
-                if self._connect_to_server(self.server_list[idx]):
-                    return True
-            
-            return False
-    
-    def _handle_error(self, e, retry_count=3):
-        """
-        Handle errors by possibly reconnecting to a different server.
+        now = time.time()
         
-        Args:
-            e: Exception that occurred
-            retry_count: Number of retries remaining
-            
-        Returns:
-            bool: True if should retry the operation
-        """
-        if retry_count <= 0:
-            return False
-        
-        # Check for metadata about leader
-        if hasattr(e, 'trailing_metadata'):
-            self.leader_info = {}
-            for key, value in e.trailing_metadata():
-                self.leader_info[key] = value
-        
-        # Try to reconnect
-        if self._try_next_server():
-            logger.info(f"Reconnected to server at {self.current_server}")
-            return True
-        
+        # Try each server in the list
+        for server in self.server_list:
+            # Skip current server and recently failed servers
+            if server == self.current_server:
+                continue
+                
+            # Skip servers that failed within the backoff period
+            last_attempt = self.last_connect_attempt.get(server, 0)
+            if now - last_attempt < self.reconnect_backoff:
+                continue
+                
+            logger.info(f"Trying alternative server at {server}")
+            if self.connect(server):
+                return True
+                
         return False
     
+    def _handle_server_failure(self, operation_name):
+        """
+        Handle server failure by trying to reconnect.
+        
+        Args:
+            operation_name: Name of the operation that failed
+            
+        Returns:
+            bool: True if reconnected successfully, False otherwise
+        """
+        logger.warning(f"Server failure during {operation_name}. Attempting to reconnect.")
+        
+        # Try to connect to another server
+        if self._try_next_server():
+            logger.info(f"Reconnected to {self.current_server}. Retrying {operation_name}.")
+            return True
+            
+        # If all servers are down, wait and try again
+        time.sleep(self.reconnect_backoff)
+        return self.connect()
+
+    def _handle_not_leader(self, response):
+        """
+        Handle the case where the current server is not the leader.
+        
+        Args:
+            response: Server response containing leader information
+            
+        Returns:
+            bool: True if successfully redirected to leader, False otherwise
+        """
+        if not hasattr(response, 'message'):
+            return False
+            
+        # Parse leader information from the response message
+        message = response.message
+        if "try leader at" in message:
+            try:
+                # Extract leader address from message
+                leader_address = message.split("try leader at ")[1].strip()
+                
+                logger.info(f"Redirecting to leader at {leader_address}")
+                
+                # Connect to the leader
+                if self.connect(leader_address):
+                    return True
+            except Exception as e:
+                logger.error(f"Failed to parse leader address: {e}")
+                
+        return False
+        
+    def register(self, username, password):
+        """
+        Register a new user with the chat service.
+        
+        Args:
+            username: User's username
+            password: User's password
+            
+        Returns:
+            RegisterResponse with success status and message
+        """
+        with self.lock:
+            # Hash password
+            password_hash = hash_password(password)
+            
+            # Create request
+            request = pb2.UserCredentials(
+                username=username,
+                password=password_hash
+            )
+            
+            # Retry loop with backoff
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = self.stub.Register(request)
+                    
+                    # If not leader, try redirecting
+                    if not response.success and self._handle_not_leader(response):
+                        # Retry with new leader
+                        response = self.stub.Register(request)
+                    
+                    return response
+                    
+                except grpc.RpcError as e:
+                    logger.error(f"RPC Error in register: {e}")
+                    
+                    # Handle server failure
+                    if not self._handle_server_failure("register"):
+                        # If reconnection failed, return error response
+                        return pb2.RegisterResponse(
+                            success=False,
+                            message=f"Failed to connect to any server after {max_retries} attempts"
+                        )
+                        
+                    # If reconnected, continue retry loop
+                    
+            # If all retries failed
+            return pb2.RegisterResponse(
+                success=False,
+                message=f"Failed after {max_retries} attempts"
+            )
+
     def call_with_retry(self, method_name, request, retry_count=3):
         """
         Call a gRPC method with automatic retries and server switching.
@@ -147,14 +273,14 @@ class FaultTolerantClient:
                     
                     # If response indicates not leader, try to find leader
                     if not response.success and "Not leader" in response.message:
-                        if self._handle_error(Exception("Not leader"), retry_count - attempt - 1):
+                        if self._handle_not_leader(response):
                             continue
                     
                     return response
                 
                 except grpc.RpcError as e:
                     logger.warning(f"RPC error during {method_name}: {e}")
-                    if self._handle_error(e, retry_count - attempt - 1):
+                    if self._handle_server_failure(method_name):
                         continue
                     else:
                         break
@@ -210,7 +336,7 @@ class FaultTolerantClient:
                 
             except grpc.RpcError as e:
                 logger.warning(f"Stream error in {method_name}: {e}")
-                self._handle_error(e)
+                self._handle_server_failure(method_name)
             
             except Exception as e:
                 logger.error(f"Error in stream {method_name}: {e}")
@@ -419,13 +545,7 @@ class ChatClient:
         
         logger.debug(f"Registering user: {username}")
         
-        response = self.client.call_with_retry(
-            'Register',
-            pb2.UserCredentials(
-                username=username,
-                password=hash_password(password)
-            )
-        )
+        response = self.client.register(username, password)
         
         if response and response.success:
             messagebox.showinfo("Success", "Account created successfully!")

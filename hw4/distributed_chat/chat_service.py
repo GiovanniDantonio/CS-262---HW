@@ -247,30 +247,45 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         """
         logger.info(f"Register request for: {request.username}")
         
-        # Check if we're the leader
-        with self.node.node_lock:
-            if self.node.state != 'leader':
-                # Redirect to leader
-                if self._redirect_to_leader(context):
-                    return pb2.Response(
-                        success=False,
-                        message=f"Not leader, try leader at {self.node.peers[self.node.leader_id]}"
-                    )
+        # If this node is not the leader, redirect to leader
+        if self.node.state != 'leader' and self.node.leader_id:
+            logger.info(f"Redirecting register request to leader at {self.node.peers[self.node.leader_id]}")
+            # Instead of just returning an error, attempt to proxy the request
+            try:
+                # Temporarily connect to leader
+                with grpc.insecure_channel(self.node.peers[self.node.leader_id]) as channel:
+                    leader_stub = pb2_grpc.ChatServiceStub(channel)
+                    # Forward the request to leader
+                    response = leader_stub.Register(request)
+                    return response
+            except grpc.RpcError:
+                # If leader can't be reached, try to become the leader
+                logger.warning(f"Cannot reach leader at {self.node.peers[self.node.leader_id]}, initiating election")
+                self.node.initiate_election()
+                if self.node.state == 'leader':  # If we became leader, process the request
+                    logger.info("Became leader, processing registration request")
                 else:
-                    return pb2.Response(
-                        success=False,
-                        message="Not leader, and no leader known. Try again later."
-                    )
-            
-            # Check if username already exists (to avoid unnecessary log entries)
-            with self.node.db_lock:
-                conn = sqlite3.connect(self.node.db_path)
-                c = conn.cursor()
-                c.execute("SELECT username FROM accounts WHERE username = ?", (request.username,))
-                if c.fetchone():
-                    conn.close()
-                    return pb2.Response(success=False, message="Username already exists.")
+                    # Still not leader, return redirect
+                    if self._redirect_to_leader(context):
+                        return pb2.Response(
+                            success=False,
+                            message=f"Not leader, try leader at {self.node.peers[self.node.leader_id]}"
+                        )
+                    else:
+                        return pb2.Response(
+                            success=False,
+                            message="Not leader, and no leader known. Try again later."
+                        )
+        
+        # Check if username already exists (to avoid unnecessary log entries)
+        with self.node.db_lock:
+            conn = sqlite3.connect(self.node.db_path)
+            c = conn.cursor()
+            c.execute("SELECT username FROM accounts WHERE username = ?", (request.username,))
+            if c.fetchone():
                 conn.close()
+                return pb2.Response(success=False, message="Username already exists.")
+            conn.close()
             
             # Append to log
             success = self._append_to_log('REGISTER', {
