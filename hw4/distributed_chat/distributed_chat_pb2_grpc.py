@@ -4,7 +4,11 @@ import grpc
 import warnings
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 from distributed_chat import distributed_chat_pb2 as distributed__chat_dot_distributed__chat__pb2
+=======
+import distributed_chat_pb2 as distributed__chat__pb2
+>>>>>>> Stashed changes
 
 GRPC_GENERATED_VERSION = '1.71.0'
 =======
@@ -25,7 +29,11 @@ if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         + f' but the generated code in distributed_chat/distributed_chat_pb2_grpc.py depends on'
+=======
+        + f' but the generated code in distributed_chat_pb2_grpc.py depends on'
+>>>>>>> Stashed changes
 =======
         + f' but the generated code in distributed_chat_pb2_grpc.py depends on'
 >>>>>>> Stashed changes
@@ -48,51 +56,57 @@ class ChatServiceStub(object):
         self.Register = channel.unary_unary(
                 '/distributed_chat.ChatService/Register',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                 request_serializer=distributed__chat_dot_distributed__chat__pb2.UserCredentials.SerializeToString,
                 response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+                request_serializer=distributed__chat__pb2.UserCredentials.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
                 _registered_method=True)
         self.Login = channel.unary_unary(
                 '/distributed_chat.ChatService/Login',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.UserCredentials.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.LoginResponse.FromString,
+                request_serializer=distributed__chat__pb2.UserCredentials.SerializeToString,
+                response_deserializer=distributed__chat__pb2.LoginResponse.FromString,
                 _registered_method=True)
         self.Logout = channel.unary_unary(
                 '/distributed_chat.ChatService/Logout',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+                request_serializer=distributed__chat__pb2.Username.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
                 _registered_method=True)
         self.DeleteAccount = channel.unary_unary(
                 '/distributed_chat.ChatService/DeleteAccount',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+                request_serializer=distributed__chat__pb2.Username.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
                 _registered_method=True)
         self.ListAccounts = channel.unary_unary(
                 '/distributed_chat.ChatService/ListAccounts',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.AccountListRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.AccountListResponse.FromString,
+                request_serializer=distributed__chat__pb2.AccountListRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.AccountListResponse.FromString,
                 _registered_method=True)
         self.SendMessage = channel.unary_unary(
                 '/distributed_chat.ChatService/SendMessage',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.Message.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+                request_serializer=distributed__chat__pb2.Message.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
                 _registered_method=True)
         self.GetMessages = channel.unary_unary(
                 '/distributed_chat.ChatService/GetMessages',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.MessageRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.MessageList.FromString,
+                request_serializer=distributed__chat__pb2.MessageRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.MessageList.FromString,
                 _registered_method=True)
         self.DeleteMessages = channel.unary_unary(
                 '/distributed_chat.ChatService/DeleteMessages',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.DeleteMessageRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+                request_serializer=distributed__chat__pb2.DeleteMessageRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
                 _registered_method=True)
         self.MarkAsRead = channel.unary_unary(
                 '/distributed_chat.ChatService/MarkAsRead',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.MarkAsReadRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+                request_serializer=distributed__chat__pb2.MarkAsReadRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Response.FromString,
                 _registered_method=True)
         self.StreamMessages = channel.unary_stream(
                 '/distributed_chat.ChatService/StreamMessages',
+<<<<<<< Updated upstream
                 request_serializer=distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
                 response_deserializer=distributed__chat_dot_distributed__chat__pb2.Message.FromString,
 =======
@@ -141,6 +155,10 @@ class ChatServiceStub(object):
                 _registered_method=True)
         self.StreamMessages = channel.unary_stream(
                 '/distributed_chat.ChatService/StreamMessages',
+                request_serializer=distributed__chat__pb2.Username.SerializeToString,
+                response_deserializer=distributed__chat__pb2.Message.FromString,
+>>>>>>> Stashed changes
+=======
                 request_serializer=distributed__chat__pb2.Username.SerializeToString,
                 response_deserializer=distributed__chat__pb2.Message.FromString,
 >>>>>>> Stashed changes
@@ -220,51 +238,57 @@ def add_ChatServiceServicer_to_server(servicer, server):
             'Register': grpc.unary_unary_rpc_method_handler(
                     servicer.Register,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                     request_deserializer=distributed__chat_dot_distributed__chat__pb2.UserCredentials.FromString,
                     response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+=======
+                    request_deserializer=distributed__chat__pb2.UserCredentials.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
+>>>>>>> Stashed changes
             ),
             'Login': grpc.unary_unary_rpc_method_handler(
                     servicer.Login,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.UserCredentials.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.LoginResponse.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.UserCredentials.FromString,
+                    response_serializer=distributed__chat__pb2.LoginResponse.SerializeToString,
             ),
             'Logout': grpc.unary_unary_rpc_method_handler(
                     servicer.Logout,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.Username.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.Username.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
             ),
             'DeleteAccount': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteAccount,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.Username.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.Username.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
             ),
             'ListAccounts': grpc.unary_unary_rpc_method_handler(
                     servicer.ListAccounts,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.AccountListRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.AccountListResponse.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.AccountListRequest.FromString,
+                    response_serializer=distributed__chat__pb2.AccountListResponse.SerializeToString,
             ),
             'SendMessage': grpc.unary_unary_rpc_method_handler(
                     servicer.SendMessage,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.Message.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.Message.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
             ),
             'GetMessages': grpc.unary_unary_rpc_method_handler(
                     servicer.GetMessages,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.MessageRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.MessageList.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.MessageRequest.FromString,
+                    response_serializer=distributed__chat__pb2.MessageList.SerializeToString,
             ),
             'DeleteMessages': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteMessages,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.DeleteMessageRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.DeleteMessageRequest.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
             ),
             'MarkAsRead': grpc.unary_unary_rpc_method_handler(
                     servicer.MarkAsRead,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.MarkAsReadRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.Response.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.MarkAsReadRequest.FromString,
+                    response_serializer=distributed__chat__pb2.Response.SerializeToString,
             ),
             'StreamMessages': grpc.unary_stream_rpc_method_handler(
                     servicer.StreamMessages,
+<<<<<<< Updated upstream
                     request_deserializer=distributed__chat_dot_distributed__chat__pb2.Username.FromString,
                     response_serializer=distributed__chat_dot_distributed__chat__pb2.Message.SerializeToString,
 =======
@@ -316,6 +340,10 @@ def add_ChatServiceServicer_to_server(servicer, server):
                     request_deserializer=distributed__chat__pb2.Username.FromString,
                     response_serializer=distributed__chat__pb2.Message.SerializeToString,
 >>>>>>> Stashed changes
+=======
+                    request_deserializer=distributed__chat__pb2.Username.FromString,
+                    response_serializer=distributed__chat__pb2.Message.SerializeToString,
+>>>>>>> Stashed changes
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -345,8 +373,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/Register',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.UserCredentials.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.UserCredentials.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.UserCredentials.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -377,8 +410,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/Login',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.UserCredentials.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.LoginResponse.FromString,
+=======
+            distributed__chat__pb2.UserCredentials.SerializeToString,
+            distributed__chat__pb2.LoginResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.UserCredentials.SerializeToString,
             distributed__chat__pb2.LoginResponse.FromString,
@@ -409,8 +447,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/Logout',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.Username.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.Username.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -441,8 +484,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/DeleteAccount',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.Username.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.Username.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -473,8 +521,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/ListAccounts',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.AccountListRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.AccountListResponse.FromString,
+=======
+            distributed__chat__pb2.AccountListRequest.SerializeToString,
+            distributed__chat__pb2.AccountListResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.AccountListRequest.SerializeToString,
             distributed__chat__pb2.AccountListResponse.FromString,
@@ -505,8 +558,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/SendMessage',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.Message.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.Message.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.Message.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -537,8 +595,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/GetMessages',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.MessageRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.MessageList.FromString,
+=======
+            distributed__chat__pb2.MessageRequest.SerializeToString,
+            distributed__chat__pb2.MessageList.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.MessageRequest.SerializeToString,
             distributed__chat__pb2.MessageList.FromString,
@@ -569,8 +632,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/DeleteMessages',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.DeleteMessageRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.DeleteMessageRequest.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.DeleteMessageRequest.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -601,8 +669,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/MarkAsRead',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.MarkAsReadRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Response.FromString,
+=======
+            distributed__chat__pb2.MarkAsReadRequest.SerializeToString,
+            distributed__chat__pb2.Response.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.MarkAsReadRequest.SerializeToString,
             distributed__chat__pb2.Response.FromString,
@@ -633,8 +706,13 @@ class ChatService(object):
             target,
             '/distributed_chat.ChatService/StreamMessages',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.Username.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.Message.FromString,
+=======
+            distributed__chat__pb2.Username.SerializeToString,
+            distributed__chat__pb2.Message.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.Username.SerializeToString,
             distributed__chat__pb2.Message.FromString,
@@ -663,23 +741,43 @@ class ReplicationServiceStub(object):
         self.RequestVote = channel.unary_unary(
                 '/distributed_chat.ReplicationService/RequestVote',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                 request_serializer=distributed__chat_dot_distributed__chat__pb2.VoteRequest.SerializeToString,
                 response_deserializer=distributed__chat_dot_distributed__chat__pb2.VoteResponse.FromString,
+=======
+                request_serializer=distributed__chat__pb2.VoteRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.VoteResponse.FromString,
+>>>>>>> Stashed changes
                 _registered_method=True)
         self.AppendEntries = channel.unary_unary(
                 '/distributed_chat.ReplicationService/AppendEntries',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.AppendEntriesRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.AppendEntriesResponse.FromString,
+                request_serializer=distributed__chat__pb2.AppendEntriesRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.AppendEntriesResponse.FromString,
                 _registered_method=True)
         self.SyncData = channel.unary_unary(
                 '/distributed_chat.ReplicationService/SyncData',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.SyncRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.SyncResponse.FromString,
+                request_serializer=distributed__chat__pb2.SyncRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.SyncResponse.FromString,
                 _registered_method=True)
         self.GetState = channel.unary_unary(
                 '/distributed_chat.ReplicationService/GetState',
-                request_serializer=distributed__chat_dot_distributed__chat__pb2.GetStateRequest.SerializeToString,
-                response_deserializer=distributed__chat_dot_distributed__chat__pb2.StateResponse.FromString,
+                request_serializer=distributed__chat__pb2.GetStateRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.StateResponse.FromString,
+                _registered_method=True)
+        self.AddServer = channel.unary_unary(
+                '/distributed_chat.ReplicationService/AddServer',
+                request_serializer=distributed__chat__pb2.AddServerRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.AddServerResponse.FromString,
+                _registered_method=True)
+        self.CatchupServer = channel.unary_unary(
+                '/distributed_chat.ReplicationService/CatchupServer',
+                request_serializer=distributed__chat__pb2.CatchupRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.CatchupResponse.FromString,
+                _registered_method=True)
+        self.PromoteServer = channel.unary_unary(
+                '/distributed_chat.ReplicationService/PromoteServer',
+                request_serializer=distributed__chat__pb2.PromoteServerRequest.SerializeToString,
+                response_deserializer=distributed__chat__pb2.PromoteServerResponse.FromString,
                 _registered_method=True)
         self.AddServer = channel.unary_unary(
                 '/distributed_chat.ReplicationService/AddServer',
@@ -787,23 +885,43 @@ def add_ReplicationServiceServicer_to_server(servicer, server):
             'RequestVote': grpc.unary_unary_rpc_method_handler(
                     servicer.RequestVote,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                     request_deserializer=distributed__chat_dot_distributed__chat__pb2.VoteRequest.FromString,
                     response_serializer=distributed__chat_dot_distributed__chat__pb2.VoteResponse.SerializeToString,
+=======
+                    request_deserializer=distributed__chat__pb2.VoteRequest.FromString,
+                    response_serializer=distributed__chat__pb2.VoteResponse.SerializeToString,
+>>>>>>> Stashed changes
             ),
             'AppendEntries': grpc.unary_unary_rpc_method_handler(
                     servicer.AppendEntries,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.AppendEntriesRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.AppendEntriesResponse.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.AppendEntriesRequest.FromString,
+                    response_serializer=distributed__chat__pb2.AppendEntriesResponse.SerializeToString,
             ),
             'SyncData': grpc.unary_unary_rpc_method_handler(
                     servicer.SyncData,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.SyncRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.SyncResponse.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.SyncRequest.FromString,
+                    response_serializer=distributed__chat__pb2.SyncResponse.SerializeToString,
             ),
             'GetState': grpc.unary_unary_rpc_method_handler(
                     servicer.GetState,
-                    request_deserializer=distributed__chat_dot_distributed__chat__pb2.GetStateRequest.FromString,
-                    response_serializer=distributed__chat_dot_distributed__chat__pb2.StateResponse.SerializeToString,
+                    request_deserializer=distributed__chat__pb2.GetStateRequest.FromString,
+                    response_serializer=distributed__chat__pb2.StateResponse.SerializeToString,
+            ),
+            'AddServer': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddServer,
+                    request_deserializer=distributed__chat__pb2.AddServerRequest.FromString,
+                    response_serializer=distributed__chat__pb2.AddServerResponse.SerializeToString,
+            ),
+            'CatchupServer': grpc.unary_unary_rpc_method_handler(
+                    servicer.CatchupServer,
+                    request_deserializer=distributed__chat__pb2.CatchupRequest.FromString,
+                    response_serializer=distributed__chat__pb2.CatchupResponse.SerializeToString,
+            ),
+            'PromoteServer': grpc.unary_unary_rpc_method_handler(
+                    servicer.PromoteServer,
+                    request_deserializer=distributed__chat__pb2.PromoteServerRequest.FromString,
+                    response_serializer=distributed__chat__pb2.PromoteServerResponse.SerializeToString,
             ),
             'AddServer': grpc.unary_unary_rpc_method_handler(
                     servicer.AddServer,
@@ -882,8 +1000,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/RequestVote',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.VoteRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.VoteResponse.FromString,
+=======
+            distributed__chat__pb2.VoteRequest.SerializeToString,
+            distributed__chat__pb2.VoteResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.VoteRequest.SerializeToString,
             distributed__chat__pb2.VoteResponse.FromString,
@@ -914,8 +1037,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/AppendEntries',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.AppendEntriesRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.AppendEntriesResponse.FromString,
+=======
+            distributed__chat__pb2.AppendEntriesRequest.SerializeToString,
+            distributed__chat__pb2.AppendEntriesResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.AppendEntriesRequest.SerializeToString,
             distributed__chat__pb2.AppendEntriesResponse.FromString,
@@ -946,8 +1074,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/SyncData',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.SyncRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.SyncResponse.FromString,
+=======
+            distributed__chat__pb2.SyncRequest.SerializeToString,
+            distributed__chat__pb2.SyncResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.SyncRequest.SerializeToString,
             distributed__chat__pb2.SyncResponse.FromString,
@@ -978,8 +1111,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/GetState',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.GetStateRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.StateResponse.FromString,
+=======
+            distributed__chat__pb2.GetStateRequest.SerializeToString,
+            distributed__chat__pb2.StateResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.GetStateRequest.SerializeToString,
             distributed__chat__pb2.StateResponse.FromString,
@@ -1010,8 +1148,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/AddServer',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.AddServerRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.AddServerResponse.FromString,
+=======
+            distributed__chat__pb2.AddServerRequest.SerializeToString,
+            distributed__chat__pb2.AddServerResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.AddServerRequest.SerializeToString,
             distributed__chat__pb2.AddServerResponse.FromString,
@@ -1042,8 +1185,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/CatchupServer',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.CatchupRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.CatchupResponse.FromString,
+=======
+            distributed__chat__pb2.CatchupRequest.SerializeToString,
+            distributed__chat__pb2.CatchupResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.CatchupRequest.SerializeToString,
             distributed__chat__pb2.CatchupResponse.FromString,
@@ -1074,8 +1222,13 @@ class ReplicationService(object):
             target,
             '/distributed_chat.ReplicationService/PromoteServer',
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             distributed__chat_dot_distributed__chat__pb2.PromoteServerRequest.SerializeToString,
             distributed__chat_dot_distributed__chat__pb2.PromoteServerResponse.FromString,
+=======
+            distributed__chat__pb2.PromoteServerRequest.SerializeToString,
+            distributed__chat__pb2.PromoteServerResponse.FromString,
+>>>>>>> Stashed changes
 =======
             distributed__chat__pb2.PromoteServerRequest.SerializeToString,
             distributed__chat__pb2.PromoteServerResponse.FromString,
