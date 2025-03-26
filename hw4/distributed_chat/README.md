@@ -10,6 +10,7 @@ A distributed, fault-tolerant chat system that implements reliability and consis
 - **Automatic Failover**: Clients automatically reconnect to available servers.
 - **Server Replication**: Supports multiple server instances in a cluster.
 - **User Authentication**: Supports user registration, login, and account management.
+- **Extra Credit**: Built the system so that it can add a new server into its set of replicas.
 
 ## Architecture
 
@@ -66,7 +67,7 @@ pip install -r requirements.txt
 3. Make sure you are already cded in the hw4 folder and then generate gRPC code from protocol buffers:
 
 ```bash
-python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.proto
+python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. distributed_chat/distributed_chat.proto
 ```
 
 ### Running a Server Cluster
@@ -74,7 +75,7 @@ python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.p
 1. Start the first server (as the leader):
 
 ```bash
-python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1
+python server/server.py --node-id 1 --port 50051
 ```
 
 2. Start additional servers (joining the leader):

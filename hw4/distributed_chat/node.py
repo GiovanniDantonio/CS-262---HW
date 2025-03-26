@@ -310,6 +310,32 @@ class ChatNode:
                 message="Server promoted to voting member"
             )
             
+    def SyncData(self, request, context):
+        """Handle data synchronization request from another node."""
+        with self.node_lock:
+            try:
+                from_index = request.from_index
+                to_index = request.to_index
+                
+                # Validate indices
+                if from_index < 0 or from_index > len(self.log):
+                    return pb2.SyncResponse(success=False)
+                
+                if to_index < from_index or to_index > len(self.log):
+                    to_index = len(self.log)
+                
+                # Get requested log entries
+                entries = self.log[from_index:to_index]
+                
+                return pb2.SyncResponse(
+                    success=True,
+                    entries=entries
+                )
+                
+            except Exception as e:
+                logger.error(f"Error during data sync: {e}")
+                return pb2.SyncResponse(success=False)
+            
     def _send_heartbeat(self):
         """Send AppendEntries RPCs to all peers (empty for heartbeat)."""
         # Send to voting members
