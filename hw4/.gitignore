@@ -1,39 +1,6 @@
-# Bytecode
+# Ignore Python bytecode
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 
-# Virtual environments
-venv/
-.env/
-.venv/
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-
-# Logs and local data
-*.log
-*.sqlite3
+# Ignore database files
 *.db
-.DS_Store
-
-# Pytest
-.pytest_cache/
-
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
-
-# Mypy
-.mypy_cache/
-
-# PyCharm / VS Code
-.idea/
-.vscode/
-
-# Protobuf generated files
-proto/*_pb2.py
-proto/*_pb2_grpc.py

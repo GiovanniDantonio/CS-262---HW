@@ -2,6 +2,7 @@ PyQt5
 pytest
 grpcio 
 grpcio-tools
+pysqlite3
 raft-python
 apscheduler
 pyyaml
