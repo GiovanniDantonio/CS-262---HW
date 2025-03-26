@@ -35,11 +35,15 @@ def start_server(node_id: str, port: int, peers: List[str]) -> subprocess.Popen:
         "--peers"
     ] + peers
     
+    # Create log file
+    log_file = open(f"server_{node_id}.log", "a")
+    
     return subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
+        stdout=log_file,
         stderr=subprocess.STDOUT,
-        universal_newlines=True
+        universal_newlines=True,
+        preexec_fn=os.setpgrp  # Create new process group
     )
 
 def main():
@@ -58,31 +62,39 @@ def main():
         processes[node_id] = proc
         
         # Wait a bit to let server initialize
-        time.sleep(1)
+        time.sleep(2)
     
     print("\nAll servers started!")
     print("Available servers:")
     for server in servers:
         print(f"  - {server}")
-    
     print("\nPress Ctrl+C to stop all servers")
     
     try:
         # Monitor server processes
         while True:
-            for node_id, proc in processes.items():
+            for node_id, proc in list(processes.items()):
                 if proc.poll() is not None:
-                    print(f"\nServer {node_id} died! Restarting...")
+                    print(f"\nServer {node_id} died! Check server_{node_id}.log for details")
+                    print("Restarting...")
                     port = BASE_PORT + int(node_id) - 1
                     processes[node_id] = start_server(node_id, port, servers)
+                    time.sleep(2)  # Wait for restart
             time.sleep(1)
             
     except KeyboardInterrupt:
         print("\nStopping all servers...")
         for proc in processes.values():
-            if proc.poll() is None:
-                proc.terminate()
-                proc.wait()
+            try:
+                # Kill entire process group
+                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                proc.wait(timeout=5)
+            except:
+                # Force kill if it doesn't respond
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except:
+                    pass
 
 if __name__ == "__main__":
     main()
