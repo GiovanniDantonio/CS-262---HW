@@ -61,9 +61,9 @@ class ChatNode:
         # Volatile state
         self.commit_index = 0
         self.last_applied = 0
-        self.state = 'follower'
+        self.state = FOLLOWER
         self.leader_id = None
-        self.election_timeout = random.uniform(1.5, 3.0)
+        self.election_timeout = random.uniform(5.0, 10.0)  # Longer timeout
         self.last_heartbeat = time.time()
         
         # Leader state
@@ -95,24 +95,30 @@ class ChatNode:
     def _run_election_timer(self):
         """Run the election timeout loop."""
         while True:
-            with self.node_lock:
-                # Only start election if we're a follower and haven't received heartbeat
-                if (self.state == 'follower' and 
-                    time.time() - self.last_heartbeat > self.election_timeout):
-                    self._start_election()
-            
-            # Sleep for a short time to avoid busy waiting
-            time.sleep(0.1)
+            try:
+                with self.node_lock:
+                    # Only start election if we're a follower and haven't received heartbeat
+                    if (self.state == FOLLOWER and 
+                        time.time() - self.last_heartbeat > self.election_timeout):
+                        self._start_election()
+                
+                # Sleep for a short time to avoid busy waiting
+                time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"Error in election timer: {e}")
             
     def _run_heartbeat_timer(self):
         """Run the heartbeat timer loop for leaders."""
         while True:
-            with self.node_lock:
-                if self.state == 'leader':
-                    self._send_heartbeat()
-            
-            # Send heartbeats every 500ms
-            time.sleep(0.5)
+            try:
+                with self.node_lock:
+                    if self.state == LEADER:
+                        self._send_heartbeat()
+                
+                # Send heartbeats every 2 seconds
+                time.sleep(2.0)
+            except Exception as e:
+                logger.error(f"Error in heartbeat timer: {e}")
             
     def _start_election(self):
         """Start a new election."""
@@ -120,17 +126,20 @@ class ChatNode:
             # Increment term and vote for self
             self.current_term += 1
             self.voted_for = self.node_id
-            self.state = 'candidate'
+            self.state = CANDIDATE
             self._persist_state()
             
             logger.info(f"Node {self.node_id} starting election for term {self.current_term}")
             
             # Reset election timeout
-            self.election_timeout = random.uniform(1.5, 3.0)
+            self.election_timeout = random.uniform(5.0, 10.0)
             self.last_heartbeat = time.time()
             
             # Request votes from all peers
             votes = 1  # Vote for self
+            total_nodes = len(self.peers) + 1
+            majority = (total_nodes // 2) + 1
+            
             for peer_id, peer_addr in self.peers.items():
                 try:
                     channel = grpc.insecure_channel(peer_addr)
@@ -143,36 +152,35 @@ class ChatNode:
                         last_log_term=self.log[-1]['term'] if self.log else 0
                     )
                     
-                    response = stub.RequestVote(request, timeout=0.5)
+                    response = stub.RequestVote(request, timeout=2.0)  # Longer RPC timeout
                     
                     if response.term > self.current_term:
                         # Revert to follower if we see higher term
                         self.current_term = response.term
-                        self.state = 'follower'
+                        self.state = FOLLOWER
                         self.voted_for = None
                         self._persist_state()
                         return
                     
                     if response.vote_granted:
                         votes += 1
+                        if votes >= majority:
+                            logger.info(f"Node {self.node_id} won election with {votes}/{total_nodes} votes")
+                            self._become_leader()
+                            return
                         
                 except Exception as e:
                     logger.warning(f"Failed to get vote from {peer_id}: {e}")
             
-            # If we got majority of votes, become leader
-            if votes > (len(self.peers) + 1) / 2:
-                logger.info(f"Node {self.node_id} won election for term {self.current_term}")
-                self._become_leader()
-            else:
-                # If we didn't get majority, revert to follower
-                self.state = 'follower'
-                self.voted_for = None
-                self._persist_state()
-                
+            # If we get here without becoming leader, revert to follower
+            self.state = FOLLOWER
+            self.voted_for = None
+            self._persist_state()
+            
     def _become_leader(self):
         """Transition to leader state."""
         with self.node_lock:
-            self.state = 'leader'
+            self.state = LEADER
             self.leader_id = self.node_id
             
             # Initialize leader state
@@ -201,18 +209,17 @@ class ChatNode:
                     leader_id=self.node_id,
                     prev_log_index=prev_log_index,
                     prev_log_term=prev_log_term,
-                    entries=[],  # Empty for heartbeat
+                    entries=[],
                     leader_commit=self.commit_index
                 )
                 
-                response = stub.AppendEntries(request, timeout=0.5)
+                response = stub.AppendEntries(request, timeout=2.0)  # Longer RPC timeout
                 
                 if response.term > self.current_term:
                     # Step down if we see higher term
                     self.current_term = response.term
-                    self.state = 'follower'
+                    self.state = FOLLOWER
                     self.voted_for = None
-                    self.leader_id = None
                     self._persist_state()
                     return
                 
@@ -332,7 +339,7 @@ class ChatNode:
                 self._persist_state()
             
             # Accept leader
-            self.state = 'follower'
+            self.state = FOLLOWER
             self.leader_id = request.leader_id
             self.last_heartbeat = time.time()
             
@@ -415,4 +422,96 @@ class ChatNode:
             return pb2.RequestVoteResponse(
                 term=self.current_term,
                 vote_granted=False
+            )
+
+    def SyncData(self, request, context):
+        """
+        Handle SyncData RPC from other nodes.
+        Used to sync state between nodes.
+        
+        Args:
+            request: SyncDataRequest protobuf message
+            context: gRPC context
+            
+        Returns:
+            SyncDataResponse protobuf message
+        """
+        try:
+            with self.node_lock:
+                # Update term if needed
+                if request.term > self.current_term:
+                    self.current_term = request.term
+                    self.state = FOLLOWER
+                    self.voted_for = None
+                    self._persist_state()
+                
+                # Get requested data
+                with self.db_lock:
+                    conn = sqlite3.connect(self.db_path)
+                    cursor = conn.cursor()
+                    
+                    # Get accounts
+                    cursor.execute("SELECT username, password FROM accounts")
+                    accounts = cursor.fetchall()
+                    
+                    # Get messages
+                    cursor.execute("SELECT sender, recipient, content, timestamp FROM messages")
+                    messages = cursor.fetchall()
+                    conn.close()
+                
+                return pb2.SyncDataResponse(
+                    term=self.current_term,
+                    success=True,
+                    accounts=[
+                        pb2.Account(username=username, password=password)
+                        for username, password in accounts
+                    ],
+                    messages=[
+                        pb2.Message(
+                            sender=sender,
+                            recipient=recipient,
+                            content=content,
+                            timestamp=timestamp
+                        )
+                        for sender, recipient, content, timestamp in messages
+                    ]
+                )
+                
+        except Exception as e:
+            logger.error(f"Error in SyncData: {e}")
+            return pb2.SyncDataResponse(
+                term=self.current_term,
+                success=False
+            )
+
+    def GetState(self, request, context):
+        """
+        Handle GetState RPC from other nodes.
+        Used to get the current state of this node.
+        
+        Args:
+            request: GetStateRequest protobuf message
+            context: gRPC context
+            
+        Returns:
+            GetStateResponse protobuf message
+        """
+        try:
+            with self.node_lock:
+                return pb2.GetStateResponse(
+                    term=self.current_term,
+                    state=self.state,
+                    leader_id=self.leader_id or "",
+                    last_log_index=len(self.log),
+                    last_log_term=self.log[-1]['term'] if self.log else 0,
+                    commit_index=self.commit_index,
+                    success=True
+                )
+                
+        except Exception as e:
+            logger.error(f"Error in GetState: {e}")
+            return pb2.GetStateResponse(
+                term=self.current_term,
+                state=FOLLOWER,
+                success=False
             )
