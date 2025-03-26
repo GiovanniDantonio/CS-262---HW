@@ -30,6 +30,11 @@ service ReplicationService {
   // Data replication
   rpc SyncData (SyncRequest) returns (SyncResponse);
   rpc GetState (GetStateRequest) returns (StateResponse);
+  
+  // Dynamic membership changes
+  rpc AddServer (AddServerRequest) returns (AddServerResponse);
+  rpc CatchupServer (CatchupRequest) returns (CatchupResponse);
+  rpc PromoteServer (PromoteServerRequest) returns (PromoteServerResponse);
 }
 
 // Basic message types
@@ -157,4 +162,38 @@ message StateResponse {
   int64 last_applied = 4;
   repeated LogEntry log_entries = 5;  // Only populated if requested
   bool success = 6;
+}
+
+// Dynamic membership change messages
+message AddServerRequest {
+  string server_id = 1;
+  string server_address = 2;
+}
+
+message AddServerResponse {
+  bool success = 1;
+  string message = 2;
+  string leader_id = 3;
+  string leader_address = 4;
+}
+
+message CatchupRequest {
+  string server_id = 1;
+  int64 last_log_index = 2;
+}
+
+message CatchupResponse {
+  bool success = 1;
+  string message = 2;
+  repeated LogEntry entries = 3;
+  int64 leader_commit = 4;
+}
+
+message PromoteServerRequest {
+  string server_id = 1;
+}
+
+message PromoteServerResponse {
+  bool success = 1;
+  string message = 2;
 }

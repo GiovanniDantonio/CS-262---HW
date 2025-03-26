@@ -61,14 +61,18 @@ class ChatNode:
         # Volatile state
         self.commit_index = 0
         self.last_applied = 0
-        self.state = FOLLOWER
+        self.state = 'follower'
         self.leader_id = None
-        self.election_timeout = random.uniform(5.0, 10.0)  # Longer timeout
+        self.election_timeout = random.uniform(1.5, 3.0)
         self.last_heartbeat = time.time()
         
         # Leader state
         self.next_index = {peer: 1 for peer in peers}
         self.match_index = {peer: 0 for peer in peers}
+        
+        # Dynamic membership state
+        self.non_voting_members = {}  # server_id -> address
+        self.catchup_status = {}  # server_id -> {'last_index': int, 'status': 'catching_up'|'ready'}
         
         # Locks
         self.node_lock = threading.RLock()
@@ -95,30 +99,24 @@ class ChatNode:
     def _run_election_timer(self):
         """Run the election timeout loop."""
         while True:
-            try:
-                with self.node_lock:
-                    # Only start election if we're a follower and haven't received heartbeat
-                    if (self.state == FOLLOWER and 
-                        time.time() - self.last_heartbeat > self.election_timeout):
-                        self._start_election()
-                
-                # Sleep for a short time to avoid busy waiting
-                time.sleep(0.1)
-            except Exception as e:
-                logger.error(f"Error in election timer: {e}")
+            with self.node_lock:
+                # Only start election if we're a follower and haven't received heartbeat
+                if (self.state == 'follower' and 
+                    time.time() - self.last_heartbeat > self.election_timeout):
+                    self._start_election()
+            
+            # Sleep for a short time to avoid busy waiting
+            time.sleep(0.1)
             
     def _run_heartbeat_timer(self):
         """Run the heartbeat timer loop for leaders."""
         while True:
-            try:
-                with self.node_lock:
-                    if self.state == LEADER:
-                        self._send_heartbeat()
-                
-                # Send heartbeats every 2 seconds
-                time.sleep(2.0)
-            except Exception as e:
-                logger.error(f"Error in heartbeat timer: {e}")
+            with self.node_lock:
+                if self.state == 'leader':
+                    self._send_heartbeat()
+            
+            # Send heartbeats every 500ms
+            time.sleep(0.5)
             
     def _start_election(self):
         """Start a new election."""
@@ -126,20 +124,17 @@ class ChatNode:
             # Increment term and vote for self
             self.current_term += 1
             self.voted_for = self.node_id
-            self.state = CANDIDATE
+            self.state = 'candidate'
             self._persist_state()
             
             logger.info(f"Node {self.node_id} starting election for term {self.current_term}")
             
             # Reset election timeout
-            self.election_timeout = random.uniform(5.0, 10.0)
+            self.election_timeout = random.uniform(1.5, 3.0)
             self.last_heartbeat = time.time()
             
             # Request votes from all peers
             votes = 1  # Vote for self
-            total_nodes = len(self.peers) + 1
-            majority = (total_nodes // 2) + 1
-            
             for peer_id, peer_addr in self.peers.items():
                 try:
                     channel = grpc.insecure_channel(peer_addr)
@@ -152,48 +147,172 @@ class ChatNode:
                         last_log_term=self.log[-1]['term'] if self.log else 0
                     )
                     
-                    response = stub.RequestVote(request, timeout=2.0)  # Longer RPC timeout
+                    response = stub.RequestVote(request, timeout=0.5)
                     
                     if response.term > self.current_term:
                         # Revert to follower if we see higher term
                         self.current_term = response.term
-                        self.state = FOLLOWER
+                        self.state = 'follower'
                         self.voted_for = None
                         self._persist_state()
                         return
                     
                     if response.vote_granted:
                         votes += 1
-                        if votes >= majority:
-                            logger.info(f"Node {self.node_id} won election with {votes}/{total_nodes} votes")
-                            self._become_leader()
-                            return
                         
                 except Exception as e:
                     logger.warning(f"Failed to get vote from {peer_id}: {e}")
             
-            # If we get here without becoming leader, revert to follower
-            self.state = FOLLOWER
-            self.voted_for = None
-            self._persist_state()
-            
+            # If we got majority of votes, become leader
+            if votes > (len(self.peers) + 1) / 2:
+                logger.info(f"Node {self.node_id} won election for term {self.current_term}")
+                self._become_leader()
+            else:
+                # If we didn't get majority, revert to follower
+                self.state = 'follower'
+                self.voted_for = None
+                self._persist_state()
+                
     def _become_leader(self):
         """Transition to leader state."""
         with self.node_lock:
-            self.state = LEADER
+            self.state = 'leader'
             self.leader_id = self.node_id
             
             # Initialize leader state
             self.next_index = {peer: len(self.log) + 1 for peer in self.peers}
             self.match_index = {peer: 0 for peer in self.peers}
             
+            # Initialize non-voting member state
+            for server_id in self.non_voting_members:
+                self.next_index[server_id] = len(self.log) + 1
+                self.match_index[server_id] = 0
+            
             # Send initial empty AppendEntries RPCs (heartbeat)
             self._send_heartbeat()
             
             logger.info(f"Node {self.node_id} became leader for term {self.current_term}")
             
+    def AddServer(self, request, context):
+        """Handle request to add a new server to the cluster."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Not the leader",
+                    leader_id=self.leader_id,
+                    leader_address=self.peers.get(self.leader_id, '')
+                )
+            
+            server_id = request.server_id
+            server_address = request.server_address
+            
+            # Check if server is already a member
+            if server_id in self.peers:
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Server is already a voting member"
+                )
+            
+            if server_id in self.non_voting_members:
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Server is already a non-voting member"
+                )
+            
+            # Add server as non-voting member
+            self.non_voting_members[server_id] = server_address
+            self.next_index[server_id] = len(self.log) + 1
+            self.match_index[server_id] = 0
+            self.catchup_status[server_id] = {
+                'last_index': 0,
+                'status': 'catching_up'
+            }
+            
+            logger.info(f"Added server {server_id} as non-voting member")
+            
+            return pb2.AddServerResponse(
+                success=True,
+                message="Server added as non-voting member"
+            )
+    
+    def CatchupServer(self, request, context):
+        """Handle catchup request from a non-voting member."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.CatchupResponse(
+                    success=False,
+                    message="Not the leader"
+                )
+            
+            server_id = request.server_id
+            last_log_index = request.last_log_index
+            
+            if server_id not in self.non_voting_members:
+                return pb2.CatchupResponse(
+                    success=False,
+                    message="Server is not a non-voting member"
+                )
+            
+            # Send missing entries
+            entries = []
+            if last_log_index < len(self.log):
+                entries = self.log[last_log_index:]
+            
+            # Update catchup status
+            if entries:
+                self.catchup_status[server_id]['last_index'] = len(self.log)
+            else:
+                # If no entries needed, server is caught up
+                self.catchup_status[server_id]['status'] = 'ready'
+            
+            return pb2.CatchupResponse(
+                success=True,
+                message="Catchup entries sent",
+                entries=entries,
+                leader_commit=self.commit_index
+            )
+    
+    def PromoteServer(self, request, context):
+        """Handle request to promote a non-voting member to voting member."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Not the leader"
+                )
+            
+            server_id = request.server_id
+            
+            if server_id not in self.non_voting_members:
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Server is not a non-voting member"
+                )
+            
+            if self.catchup_status[server_id]['status'] != 'ready':
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Server is not ready for promotion"
+                )
+            
+            # Move server from non-voting to voting members
+            server_address = self.non_voting_members.pop(server_id)
+            self.peers[server_id] = server_address
+            
+            # Clean up catchup status
+            del self.catchup_status[server_id]
+            
+            logger.info(f"Promoted server {server_id} to voting member")
+            
+            return pb2.PromoteServerResponse(
+                success=True,
+                message="Server promoted to voting member"
+            )
+            
     def _send_heartbeat(self):
         """Send AppendEntries RPCs to all peers (empty for heartbeat)."""
+        # Send to voting members
         for peer_id, peer_addr in self.peers.items():
             try:
                 channel = grpc.insecure_channel(peer_addr)
@@ -213,13 +332,41 @@ class ChatNode:
                     leader_commit=self.commit_index
                 )
                 
-                response = stub.AppendEntries(request, timeout=2.0)  # Longer RPC timeout
+                response = stub.AppendEntries(request, timeout=0.5)
+                
+                if response.term > self.current_term:
+                    self.current_term = response.term
+                    self.state = 'follower'
+                    self.voted_for = None
+                    self._persist_state()
+                    return
+                    
+            except Exception as e:
+                logger.warning(f"Failed to send heartbeat to {peer_id}: {e}")
+                
+        # Send to non-voting members
+        for server_id, addr in self.non_voting_members.items():
+            try:
+                channel = grpc.insecure_channel(addr)
+                stub = pb2_grpc.ReplicationServiceStub(channel)
+                
+                request = pb2.AppendEntriesRequest(
+                    term=self.current_term,
+                    leader_id=self.node_id,
+                    prev_log_index=prev_log_index,
+                    prev_log_term=prev_log_term,
+                    entries=[],  # Empty for heartbeat
+                    leader_commit=self.commit_index
+                )
+                
+                response = stub.AppendEntries(request, timeout=0.5)
                 
                 if response.term > self.current_term:
                     # Step down if we see higher term
                     self.current_term = response.term
-                    self.state = FOLLOWER
+                    self.state = 'follower'
                     self.voted_for = None
+                    self.leader_id = None
                     self._persist_state()
                     return
                 
@@ -339,7 +486,7 @@ class ChatNode:
                 self._persist_state()
             
             # Accept leader
-            self.state = FOLLOWER
+            self.state = 'follower'
             self.leader_id = request.leader_id
             self.last_heartbeat = time.time()
             
@@ -422,96 +569,4 @@ class ChatNode:
             return pb2.RequestVoteResponse(
                 term=self.current_term,
                 vote_granted=False
-            )
-
-    def SyncData(self, request, context):
-        """
-        Handle SyncData RPC from other nodes.
-        Used to sync state between nodes.
-        
-        Args:
-            request: SyncDataRequest protobuf message
-            context: gRPC context
-            
-        Returns:
-            SyncDataResponse protobuf message
-        """
-        try:
-            with self.node_lock:
-                # Update term if needed
-                if request.term > self.current_term:
-                    self.current_term = request.term
-                    self.state = FOLLOWER
-                    self.voted_for = None
-                    self._persist_state()
-                
-                # Get requested data
-                with self.db_lock:
-                    conn = sqlite3.connect(self.db_path)
-                    cursor = conn.cursor()
-                    
-                    # Get accounts
-                    cursor.execute("SELECT username, password FROM accounts")
-                    accounts = cursor.fetchall()
-                    
-                    # Get messages
-                    cursor.execute("SELECT sender, recipient, content, timestamp FROM messages")
-                    messages = cursor.fetchall()
-                    conn.close()
-                
-                return pb2.SyncDataResponse(
-                    term=self.current_term,
-                    success=True,
-                    accounts=[
-                        pb2.Account(username=username, password=password)
-                        for username, password in accounts
-                    ],
-                    messages=[
-                        pb2.Message(
-                            sender=sender,
-                            recipient=recipient,
-                            content=content,
-                            timestamp=timestamp
-                        )
-                        for sender, recipient, content, timestamp in messages
-                    ]
-                )
-                
-        except Exception as e:
-            logger.error(f"Error in SyncData: {e}")
-            return pb2.SyncDataResponse(
-                term=self.current_term,
-                success=False
-            )
-
-    def GetState(self, request, context):
-        """
-        Handle GetState RPC from other nodes.
-        Used to get the current state of this node.
-        
-        Args:
-            request: GetStateRequest protobuf message
-            context: gRPC context
-            
-        Returns:
-            GetStateResponse protobuf message
-        """
-        try:
-            with self.node_lock:
-                return pb2.GetStateResponse(
-                    term=self.current_term,
-                    state=self.state,
-                    leader_id=self.leader_id or "",
-                    last_log_index=len(self.log),
-                    last_log_term=self.log[-1]['term'] if self.log else 0,
-                    commit_index=self.commit_index,
-                    success=True
-                )
-                
-        except Exception as e:
-            logger.error(f"Error in GetState: {e}")
-            return pb2.GetStateResponse(
-                term=self.current_term,
-                state=FOLLOWER,
-                success=False
             )
