@@ -24,6 +24,10 @@ class ReplicationManager:
         self.replicas = self.config['replicas']
         self.leader_check_interval = self.config.get('leader_check_interval', 3)
         
+        # Initialize heartbeat for self
+        with self.lock:
+            self.last_heartbeat[self.replica_id] = time.time()
+        
         # Start leader election and heartbeat threads
         self.stop_threads = False
         self.election_thread = threading.Thread(target=self._run_leader_election)
@@ -69,14 +73,17 @@ class ReplicationManager:
     def _send_heartbeats(self):
         """Send heartbeats to other replicas."""
         while not self.stop_threads:
+            # Always update own heartbeat
+            with self.lock:
+                self.last_heartbeat[self.replica_id] = time.time()
+                
             if self.is_leader:
                 for replica in self.replicas:
                     if replica['id'] != self.replica_id:
                         try:
                             # In a real implementation, we would use gRPC to send heartbeats
                             # For now, we just update the timestamp locally
-                            with self.lock:
-                                self.last_heartbeat[self.replica_id] = time.time()
+                            logger.debug(f"Leader {self.replica_id} sending heartbeat")
                         except Exception as e:
                             logger.error(f"Failed to send heartbeat to replica {replica['id']}: {e}")
             time.sleep(1)
