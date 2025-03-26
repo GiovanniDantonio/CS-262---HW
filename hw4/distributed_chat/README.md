@@ -9,6 +9,7 @@ This is a redesigned chat application that provides both persistence and 2-fault
 - **Leader Election**: Automatic leader election ensures there's always a single source of truth
 - **Transparent Failover**: Clients automatically reconnect to available servers when failures occur
 - **Cross-Machine Replication**: Support for running nodes on different physical machines
+- **Dynamic Server Addition**: Support for adding new servers to the cluster while it's running
 
 ## Architecture
 
@@ -118,12 +119,39 @@ nodes:
 - gRPC for all communication (client-server and server-server)
 - Protocol Buffers for message serialization
 
+## Dynamic Server Addition
+
+The system supports adding new servers to the cluster while it's running. This is done through a two-phase process:
+
+1. **Non-Voting Member Phase**: The new server is first added as a non-voting member
+   - Receives log entries and updates but doesn't participate in leader election
+   - Catches up with the current state of the cluster
+
+2. **Promotion Phase**: Once caught up, the server is promoted to a full voting member
+   - Participates in leader election and consensus
+   - Counts towards the quorum for write operations
+
+### Adding a New Server
+
+```bash
+# Add a new server to the cluster
+python add_server.py <leader_address> <new_server_id> <new_server_address>
+
+# Example:
+python add_server.py localhost:50051 4 localhost:50054
+```
+
+The script will:
+1. Contact the leader to add the new server
+2. Wait for the new server to catch up with the log
+3. Promote the server to a voting member
+
 ## Limitations and Future Improvements
 
 - Currently implements a simplified version of the Raft consensus algorithm
 - No automatic log compaction/snapshotting
-- No dynamic node membership changes
 - Simplified security (no encryption, authentication beyond username/password)
+- No support for removing servers from the cluster
 
 ## Acknowledgements
 
