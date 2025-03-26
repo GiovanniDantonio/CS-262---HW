@@ -17,9 +17,8 @@ from datetime import datetime
 from concurrent import futures
 
 # Import the generated protobuf modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from distributed_chat import distributed_chat_pb2 as pb2
-from distributed_chat import distributed_chat_pb2_grpc as pb2_grpc
+import distributed_chat_pb2 as pb2
+import distributed_chat_pb2_grpc as pb2_grpc
 
 # Configure logging
 logging.basicConfig(
@@ -61,10 +60,9 @@ class ChatNode:
         # Volatile state
         self.commit_index = 0
         self.last_applied = 0
-        self.state = 'follower'
-        self.leader_id = None
-        self.election_timeout = random.uniform(1.5, 3.0)
-        self.last_heartbeat = time.time()
+        self.state = 'leader'  # Simplified: first node is always leader
+        self.is_leader = True  # Add explicit is_leader attribute
+        self.leader_id = self.node_id
         
         # Leader state
         self.next_index = {peer: 1 for peer in peers}
@@ -84,17 +82,7 @@ class ChatNode:
         # Load persistent state if it exists
         self._load_persistent_state()
         
-        # Start election timer
-        self.election_timer = threading.Thread(target=self._run_election_timer)
-        self.election_timer.daemon = True
-        self.election_timer.start()
-        
-        # Start heartbeat timer
-        self.heartbeat_timer = threading.Thread(target=self._run_heartbeat_timer)
-        self.heartbeat_timer.daemon = True
-        self.heartbeat_timer.start()
-        
-        logger.info(f"Node {node_id} initialized in {self.state} state")
+        logger.info(f"Node {node_id} initialized as leader")
         
     def _run_election_timer(self):
         """Run the election timeout loop."""
@@ -125,6 +113,7 @@ class ChatNode:
             self.current_term += 1
             self.voted_for = self.node_id
             self.state = 'candidate'
+            self.is_leader = False  # Ensure is_leader is False during election
             self._persist_state()
             
             logger.info(f"Node {self.node_id} starting election for term {self.current_term}")
@@ -178,6 +167,7 @@ class ChatNode:
         with self.node_lock:
             self.state = 'leader'
             self.leader_id = self.node_id
+            self.is_leader = True  # Set is_leader to True when becoming leader
             
             # Initialize leader state
             self.next_index = {peer: len(self.log) + 1 for peer in self.peers}
@@ -513,6 +503,7 @@ class ChatNode:
             
             # Accept leader
             self.state = 'follower'
+            self.is_leader = False  # Set is_leader to False when stepping down
             self.leader_id = request.leader_id
             self.last_heartbeat = time.time()
             
@@ -596,3 +587,68 @@ class ChatNode:
                 term=self.current_term,
                 vote_granted=False
             )
+
+    def SyncData(self, request, context):
+        """
+        Handle data synchronization request from other nodes.
+        
+        Args:
+            request: SyncRequest with from_index and to_index
+            context: gRPC context
+            
+        Returns:
+            SyncResponse with log entries and success status
+        """
+        with self.node_lock:
+            response = pb2.SyncResponse()
+            try:
+                # Get log entries in the requested range
+                entries = [entry for entry in self.log 
+                         if request.from_index <= entry['index'] <= request.to_index]
+                response.entries.extend(entries)
+                response.success = True
+            except Exception as e:
+                logger.error(f"Error in SyncData: {str(e)}")
+                response.success = False
+            return response
+
+    def GetState(self, request, context):
+        """
+        Get the current state of the node.
+        
+        Args:
+            request: GetStateRequest with include_log_entries and from_log_index flags
+            context: gRPC context
+            
+        Returns:
+            StateResponse with current node state
+        """
+        with self.node_lock:
+            response = pb2.StateResponse()
+            try:
+                response.current_term = self.current_term
+                response.voted_for = self.voted_for or ""
+                response.commit_index = self.commit_index
+                response.last_applied = self.last_applied
+                
+                if request.include_log_entries:
+                    # Only include log entries from the requested index
+                    entries = [entry for entry in self.log 
+                             if entry['index'] >= request.from_log_index]
+                    response.log_entries.extend(entries)
+                    
+                response.success = True
+            except Exception as e:
+                logger.error(f"Error in GetState: {str(e)}")
+                response.success = False
+            return response
+
+    def is_leader(self):
+        """
+        Check if this node is currently the leader.
+        
+        Returns:
+            bool: True if this node is the leader, False otherwise
+        """
+        with self.node_lock:
+            return self.state == 'leader'

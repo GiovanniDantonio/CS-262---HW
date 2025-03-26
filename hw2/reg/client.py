@@ -7,6 +7,8 @@ import hashlib
 import logging
 from datetime import datetime
 import threading
+import json
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -26,9 +28,13 @@ class ChatClient:
         self.master.geometry("600x800")
         self.username = None
 
-        # gRPC channel and stub (using client_config.json host/port if desired)
-        self.channel = grpc.insecure_channel("localhost:50051")
-        self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
+        # Load replica configuration
+        self.config = self._load_config()
+        self.replicas = self.config['replicas']
+        self.current_replica_index = 0
+        
+        # Initialize connection to first replica
+        self.connect_to_replica()
 
         self.stop_event = threading.Event()
         self.listener_thread = None
@@ -36,11 +42,53 @@ class ChatClient:
         # Build login UI; do not start listener yet
         self.create_login_widgets()
 
+    def _load_config(self):
+        """Load replication configuration."""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_dir, "replicated_config.json")
+        with open(config_path, 'r') as f:
+            return json.load(f)
+
+    def connect_to_replica(self):
+        """Connect to current replica, with failover support."""
+        while self.current_replica_index < len(self.replicas):
+            replica = self.replicas[self.current_replica_index]
+            try:
+                if hasattr(self, 'channel'):
+                    self.channel.close()
+                self.channel = grpc.insecure_channel(f"{replica['host']}:{replica['port']}")
+                self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
+                logger.info(f"Connected to replica {replica['id']} at {replica['host']}:{replica['port']}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to connect to replica {replica['id']}: {e}")
+                self.current_replica_index += 1
+        
+        messagebox.showerror("Error", "Failed to connect to any replica")
+        return False
+
+    def try_operation(self, operation, *args, **kwargs):
+        """Try an operation with automatic failover."""
+        max_retries = len(self.replicas)
+        retries = 0
+        
+        while retries < max_retries:
+            try:
+                return operation(*args, **kwargs)
+            except grpc.RpcError as e:
+                logger.error(f"RPC error: {e}")
+                retries += 1
+                if retries < max_retries:
+                    self.current_replica_index = (self.current_replica_index + 1) % len(self.replicas)
+                    if self.connect_to_replica():
+                        continue
+                raise
+
+    # --- UI Creation ---
     def clear_window(self):
         for widget in self.master.winfo_children():
             widget.destroy()
 
-    # --- UI Creation ---
     def create_login_widgets(self):
         self.clear_window()
         self.login_frame = ttk.Frame(self.master, padding="10")
@@ -132,10 +180,13 @@ class ChatClient:
             return
         logger.debug(f"Registering user: {username}")
         try:
-            response = self.stub.Register(chat_pb2.UserCredentials(
-                username=username,
-                password=hash_password(password)
-            ))
+            response = self.try_operation(
+                self.stub.Register,
+                chat_pb2.UserCredentials(
+                    username=username,
+                    password=hash_password(password)
+                )
+            )
             if response.success:
                 messagebox.showinfo("Success", "Account created successfully!")
             else:
@@ -152,10 +203,13 @@ class ChatClient:
             return
         logger.debug(f"Logging in user: {username}")
         try:
-            response = self.stub.Login(chat_pb2.UserCredentials(
-                username=username,
-                password=hash_password(password)
-            ))
+            response = self.try_operation(
+                self.stub.Login,
+                chat_pb2.UserCredentials(
+                    username=username,
+                    password=hash_password(password)
+                )
+            )
             if response.success:
                 self.username = username
                 messagebox.showinfo("Success", f"Login successful! You have {response.unread_count} unread messages.")
@@ -171,9 +225,12 @@ class ChatClient:
     def list_accounts(self, pattern="%"):
         logger.debug(f"Requesting account list with pattern: {pattern}")
         try:
-            response = self.stub.ListAccounts(chat_pb2.AccountListRequest(
-                pattern=pattern, page=1, per_page=50
-            ))
+            response = self.try_operation(
+                self.stub.ListAccounts,
+                chat_pb2.AccountListRequest(
+                    pattern=pattern, page=1, per_page=50
+                )
+            )
             self.user_listbox.delete(0, tk.END)
             for account in response.accounts:
                 self.user_listbox.insert(tk.END, account.username)
@@ -189,9 +246,12 @@ class ChatClient:
             return
         logger.debug(f"Sending message from {self.username} to {recipient}")
         try:
-            response = self.stub.SendMessage(chat_pb2.Message(
-                sender=self.username, recipient=recipient, content=content
-            ))
+            response = self.try_operation(
+                self.stub.SendMessage,
+                chat_pb2.Message(
+                    sender=self.username, recipient=recipient, content=content
+                )
+            )
             if response.success:
                 self.message_entry.delete(0, tk.END)
             else:
@@ -203,9 +263,12 @@ class ChatClient:
     def get_messages(self, count=10):
         logger.debug(f"Requesting messages for {self.username}")
         try:
-            response = self.stub.GetMessages(chat_pb2.MessageRequest(
-                username=self.username, count=count
-            ))
+            response = self.try_operation(
+                self.stub.GetMessages,
+                chat_pb2.MessageRequest(
+                    username=self.username, count=count
+                )
+            )
             # Clear existing messages in the Treeview
             for item in self.chat_display.get_children():
                 self.chat_display.delete(item)
@@ -230,10 +293,13 @@ class ChatClient:
             message_ids = [int(item) for item in selected_items]
             
             # Call DeleteMessages RPC
-            response = self.stub.DeleteMessages(chat_pb2.DeleteMessagesRequest(
-                username=self.username,
-                message_ids=message_ids
-            ))
+            response = self.try_operation(
+                self.stub.DeleteMessages,
+                chat_pb2.DeleteMessagesRequest(
+                    username=self.username,
+                    message_ids=message_ids
+                )
+            )
             
             if response.success:
                 # Remove deleted messages from display
@@ -255,15 +321,21 @@ class ChatClient:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
         try:
-            response = self.stub.GetMessages(chat_pb2.MessageRequest(
-                username=self.username, count=1000
-            ))
+            response = self.try_operation(
+                self.stub.GetMessages,
+                chat_pb2.MessageRequest(
+                    username=self.username, count=1000
+                )
+            )
             unread_count = sum(1 for msg in response.messages if not msg.read)
             warning_msg = "Are you sure you want to delete your account?"
             if unread_count > 0:
                 warning_msg += f"\n\nWARNING: You have {unread_count} unread message(s) that will be permanently deleted!"
             if messagebox.askyesno("Confirm Account Deletion", warning_msg):
-                del_response = self.stub.DeleteAccount(chat_pb2.UserRequest(username=self.username))
+                del_response = self.try_operation(
+                    self.stub.DeleteAccount,
+                    chat_pb2.UserRequest(username=self.username)
+                )
                 if del_response.success:
                     self.stop_auto_refresh()
                     self.username = None
@@ -281,7 +353,10 @@ class ChatClient:
             messagebox.showinfo("No user logged in", "You are not currently logged in.")
             return
         try:
-            response = self.stub.Logout(chat_pb2.UserRequest(username=self.username))
+            response = self.try_operation(
+                self.stub.Logout,
+                chat_pb2.UserRequest(username=self.username)
+            )
             if response.success:
                 messagebox.showinfo("Success", "Logged out successfully")
                 self.stop_auto_refresh()
@@ -318,10 +393,13 @@ class ChatClient:
             self.chat_display.item(item, tags=())
             # Call MarkAsRead RPC for this message
             try:
-                response = self.stub.MarkAsRead(chat_pb2.MarkAsReadRequest(
-                    username=self.username,
-                    message_ids=[int(item)]
-                ))
+                response = self.try_operation(
+                    self.stub.MarkAsRead,
+                    chat_pb2.MarkAsReadRequest(
+                        username=self.username,
+                        message_ids=[int(item)]
+                    )
+                )
                 if response.success:
                     logger.debug(f"Marked message {item} as read.")
                 else:
@@ -334,7 +412,10 @@ class ChatClient:
         try:
             # Use the current username once logged in; if not logged in, use empty string.
             req_username = self.username if self.username else ""
-            for broadcast in self.stub.StreamMessages(chat_pb2.UserRequest(username=req_username)):
+            for broadcast in self.try_operation(
+                self.stub.StreamMessages,
+                chat_pb2.UserRequest(username=req_username)
+            ):
                 logger.debug(f"Broadcast message received: {broadcast}")
                 self.master.after(0, self.process_broadcast_message, broadcast)
         except grpc.RpcError as e:
@@ -359,8 +440,6 @@ class ChatClient:
                     self.chat_display.see(children[-1])
             except Exception as e:
                 logger.error(f"Error processing broadcast message for item {item_id}: {e}")
-
-
 
     def start_listener(self):
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)

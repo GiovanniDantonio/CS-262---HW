@@ -10,28 +10,16 @@ import logging
 import threading
 import os
 import json
+import argparse
+from replication_manager import ReplicationManager
 
 # ------------------ Configuration ------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(BASE_DIR, "server_config.json")
-default_config = {
-    "host": "0.0.0.0",    # Not used directly for gRPC, but for reference.
-    "port": 50051,        # gRPC port (changed from 12345 to 50051)
-    "db_path": "chat.db"
-}
+CONFIG_FILE = os.path.join(BASE_DIR, "replicated_config.json")
 
-if os.path.isfile(CONFIG_FILE):
-    with open(CONFIG_FILE, "r") as f:
-        user_config = json.load(f)
-    config = {**default_config, **user_config}
-else:
-    logging.warning(f"No config file found at {CONFIG_FILE}. Using defaults.")
-    config = default_config
-
-HOST = config["host"]
-PORT = config["port"]
-DB_PATH = config["db_path"]
+with open(CONFIG_FILE, "r") as f:
+    config = json.load(f)
 
 # ------------------ Logging Setup ------------------
 
@@ -41,11 +29,11 @@ logger = logging.getLogger("chat_server")
 
 # ------------------ Database Initialization & Migration ------------------
 
-def init_db():
+def init_db(db_path):
     """Initialize the SQLite database with required tables."""
     logger.info("Initializing database...")
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(db_path)
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS accounts (
@@ -75,11 +63,11 @@ def init_db():
     finally:
         conn.close()
 
-def migrate_database():
+def migrate_database(db_path):
     """Migrate database to latest schema."""
     logger.info("Checking database schema...")
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(db_path)
         c = conn.cursor()
         c.execute("PRAGMA table_info(messages)")
         columns = [col[1] for col in c.fetchall()]
@@ -101,22 +89,34 @@ def hash_password(password: str) -> str:
 # ------------------ gRPC Service Implementation ------------------
 
 class ChatService(chat_pb2_grpc.ChatServiceServicer):
-    def __init__(self):
+    def __init__(self, replica_id):
         # For streaming clients: map username -> context; used for bookkeeping.
         self.active_streams = {}
         self.lock = threading.Lock()
-        init_db()
-        migrate_database()
+        self.replication_manager = ReplicationManager(replica_id)
+        replica_info = self.replication_manager.get_replica_info()
+        self.db_path = replica_info['db_path']
+        init_db(self.db_path)
+        migrate_database(self.db_path)
 
     def Register(self, request, context):
         """Handle user registration."""
         logger.info(f"Register request for: {request.username}")
-        conn = sqlite3.connect(DB_PATH)
+        if not self.replication_manager.is_leader:
+            return chat_pb2.Response(success=False, message="Not the leader node")
+
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO accounts (username, password) VALUES (?, ?)",
-                      (request.username, hash_password(request.password)))
+            query = "INSERT INTO accounts (username, password) VALUES (?, ?)"
+            params = (request.username, hash_password(request.password))
+            
+            c.execute(query, params)
             conn.commit()
+            
+            # Replicate to other nodes
+            self.replication_manager.replicate_data(query, params)
+            
             return chat_pb2.Response(success=True, message="Account created successfully.")
         except sqlite3.IntegrityError:
             return chat_pb2.Response(success=False, message="Username already exists.")
@@ -129,7 +129,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
     def Login(self, request, context):
         """Handle user login."""
         logger.info(f"Login attempt for: {request.username}")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute("SELECT password FROM accounts WHERE username = ?", (request.username,))
         record = c.fetchone()
@@ -158,7 +158,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
     def DeleteAccount(self, request, context):
         """Handle account deletion."""
         logger.info(f"DeleteAccount request for: {request.username}")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         # Get unread message count
         c.execute("SELECT COUNT(*) FROM messages WHERE recipient = ? AND read = 0", (request.username,))
@@ -181,7 +181,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
     def ListAccounts(self, request, context):
         """Handle listing accounts."""
         logger.info(f"ListAccounts request: pattern='{request.pattern}', page={request.page}, per_page={request.per_page}")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         pattern = request.pattern if request.pattern else "%"
         page = request.page if request.page > 0 else 1
@@ -205,7 +205,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
     def SendMessage(self, request, context):
         """Handle sending a message."""
         logger.info(f"SendMessage: from {request.sender} to {request.recipient}: {request.content}")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             c.execute("INSERT INTO messages (sender, recipient, content, read) VALUES (?, ?, ?, 0)",
@@ -223,7 +223,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
     def GetMessages(self, request, context):
         """Handle fetching messages."""
         logger.info(f"GetMessages: for {request.username} (limit {request.count})")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             c.execute("SELECT id, sender, recipient, content, timestamp, read FROM messages WHERE recipient = ? ORDER BY timestamp DESC LIMIT ?",
@@ -250,7 +250,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
         logger.info(f"DeleteMessages: for {request.username}, IDs: {request.message_ids}")
         if not request.message_ids:
             return chat_pb2.Response(success=False, message="No message IDs provided.")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             placeholders = ','.join('?' for _ in request.message_ids)
@@ -270,7 +270,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
         logger.info(f"MarkAsRead: for {request.username}, IDs: {request.message_ids}")
         if not request.message_ids:
             return chat_pb2.Response(success=False, message="No message IDs provided.")
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         try:
             placeholders = ','.join('?' for _ in request.message_ids)
@@ -297,7 +297,7 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
         try:
             while True:
                 time.sleep(3)
-                conn = sqlite3.connect(DB_PATH)
+                conn = sqlite3.connect(self.db_path)
                 c = conn.cursor()
                 # Only return unread messages.
                 c.execute("SELECT id, sender, recipient, content, timestamp, read FROM messages WHERE recipient = ? AND read = 0 ORDER BY timestamp DESC LIMIT 50",
@@ -323,19 +323,30 @@ class ChatService(chat_pb2_grpc.ChatServiceServicer):
 
 # ------------------ Server Setup ------------------
 
-def serve():
-    # Create a gRPC server
+def serve(replica_id=0):
+    """Run the gRPC server."""
+    replica_info = None
+    for replica in config['replicas']:
+        if replica['id'] == replica_id:
+            replica_info = replica
+            break
+    
+    if not replica_info:
+        raise ValueError(f"No configuration found for replica {replica_id}")
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    chat_pb2_grpc.add_ChatServiceServicer_to_server(ChatService(), server)
-    server_address = f"[::]:{PORT}"
-    server.add_insecure_port(server_address)
-    logger.info(f"Starting gRPC server on {server_address}...")
+    chat_pb2_grpc.add_ChatServiceServicer_to_server(ChatService(replica_id), server)
+    server.add_insecure_port(f"{replica_info['host']}:{replica_info['port']}")
     server.start()
+    logger.info(f"Server started on {replica_info['host']}:{replica_info['port']}")
     try:
         server.wait_for_termination()
     except KeyboardInterrupt:
-        logger.info("Server shutting down...")
         server.stop(0)
 
 if __name__ == "__main__":
-    serve()
+    parser = argparse.ArgumentParser(description='Start a chat server replica')
+    parser.add_argument('--replica-id', type=int, default=0,
+                      help='ID of the replica to start (default: 0)')
+    args = parser.parse_args()
+    serve(args.replica_id)

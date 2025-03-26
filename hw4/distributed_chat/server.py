@@ -13,9 +13,8 @@ from concurrent import futures
 import grpc
 
 # Import the generated protobuf modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from distributed_chat import distributed_chat_pb2 as pb2
-from distributed_chat import distributed_chat_pb2_grpc as pb2_grpc
+import distributed_chat_pb2 as pb2
+import distributed_chat_pb2_grpc as pb2_grpc
 
 # Import node implementation
 from node import ChatNode

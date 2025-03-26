@@ -1,0 +1,26 @@
+{
+    "nodes": [
+        {
+            "id": 1,
+            "host": "localhost",
+            "port": 12345,
+            "data_dir": "node1_data"
+        },
+        {
+            "id": 2,
+            "host": "localhost",
+            "port": 12346,
+            "data_dir": "node2_data"
+        },
+        {
+            "id": 3,
+            "host": "localhost",
+            "port": 12347,
+            "data_dir": "node3_data"
+        }
+    ],
+    "election_timeout_ms": 150,
+    "heartbeat_interval_ms": 50,
+    "client_retry_interval_ms": 100,
+    "max_batch_size": 100
+}

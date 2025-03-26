@@ -1,0 +1,23 @@
+{
+    "nodes": [
+        {
+            "id": 1,
+            "host": "localhost",
+            "port": 12345
+        },
+        {
+            "id": 2,
+            "host": "localhost",
+            "port": 12346
+        },
+        {
+            "id": 3,
+            "host": "localhost",
+            "port": 12347
+        }
+    ],
+    "client_retry_interval_ms": 1000,
+    "election_timeout_min_ms": 150,
+    "election_timeout_max_ms": 300,
+    "heartbeat_interval_ms": 50
+}
