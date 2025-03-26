@@ -1,131 +1,166 @@
-# Distributed Fault-Tolerant Chat System
+# Fault-Tolerant Chat System
 
-This is a redesigned chat application that provides both persistence and 2-fault tolerance in the face of crash/failstop failures. The system uses a consensus algorithm based on Raft to replicate the chat state across multiple server nodes.
+A distributed, fault-tolerant chat system that implements reliability and consistency across multiple nodes.
 
 ## Features
 
-- **Persistence**: All chat data is stored in SQLite databases and persists across server restarts
-- **2-Fault Tolerance**: The system continues to operate correctly even if 2 out of 3 nodes fail
-- **Leader Election**: Automatic leader election ensures there's always a single source of truth
-- **Transparent Failover**: Clients automatically reconnect to available servers when failures occur
-- **Cross-Machine Replication**: Support for running nodes on different physical machines
+- **2-Fault Tolerance**: Continues operating even when two or more servers fail.
+- **Consistency**: Ensures all servers have the same data.
+- **Persistence**: Stores messages and state to disk for durability.
+- **Automatic Failover**: Clients automatically reconnect to available servers.
+- **Server Replication**: Supports multiple server instances in a cluster.
+- **User Authentication**: Supports user registration, login, and account management.
 
 ## Architecture
 
-The system follows a leader-follower architecture:
+The system is built using the following components:
 
-1. **Server Nodes**: Each node has its own local SQLite database and can operate in one of three states:
-   - Leader: Accepts write operations and replicates them to followers
-   - Follower: Accepts read operations and forwards write operations to the leader
-   - Candidate: Temporary state during leader election
+1. **Consensus Module**: Implements leader election, log replication, and cluster membership.
+2. **Persistence Layer**: Handles durable storage of logs, state, and snapshots.
+3. **gRPC Services**: Provides client-server and server-server communication. This was implemented using the `grpc` library. Also, we used the `grpc_tools.protoc` to generate the gRPC code from the `chat.proto` file. Furthermore, we took our code from the previous homework.
+4. **Client Library**: Manages connections, retries, and automatic failover.
+5. **Command-Line Interface**: Provides a user interface for interacting with the system.
 
-2. **Consensus Protocol**: Implements a simplified Raft consensus algorithm:
-   - Log replication ensures all nodes maintain the same state
-   - Leader election ensures there's always a single leader
-   - Majority voting guarantees consistency
+## Directory Structure
 
-3. **Client Design**: The client is fault-tolerant and automatically:
-   - Handles server failures by reconnecting to other available servers
-   - Discovers the current leader for write operations
-   - Streams messages in real-time
-
-## Setup and Running
+```
+hw4/
+├── client/           # Client implementation
+│   ├── client.py     # Client library for application integration
+│   └── cli_client.py # Command-line interface
+├── common/           # Shared modules
+│   ├── persistence.py # Persistence and storage
+│   └── raft.py       # Raft consensus implementation
+├── proto/            # Protocol buffer definitions
+│   └── chat.proto    # Service and message definitions
+├── server/           # Server implementation
+│   ├── server.py     # Main server class
+│   ├── server_handlers.py # Request handlers
+│   └── run_server.py # Server launcher script
+└── tests/            # Unit and integration tests
+    ├── test_raft.py  # Tests for Raft consensus
+    └── test_client.py # Tests for client functionality
+```
 
 ### Prerequisites
 
-- Python 3.6+
-- Required packages listed in `requirements.txt`
+- Python 3.7+
+- gRPC and Protocol Buffers
 
-### Running the Server Nodes
+### Installation
 
-Start at least 3 nodes to achieve 2-fault tolerance:
-
-```bash
-# Start node 1 (in terminal 1)
-python server.py --id 1 --config config.yaml
-
-# Start node 2 (in terminal 2)
-python server.py --id 2 --config config.yaml
-
-# Start node 3 (in terminal 3)
-python server.py --id 3 --config config.yaml
-```
-
-### Running the Client
+1. Clone the repository
+2. Create a virtual environment and activate it:
 
 ```bash
-# Connect to any of the server nodes
-python client.py
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-The client will automatically discover other nodes and connect to the leader when needed.
+Install dependencies:
 
-## Testing Fault Tolerance
-
-To test fault tolerance, you can:
-
-1. Start 3 server nodes
-2. Connect a client and register/login
-3. Send some messages
-4. Stop 1 or 2 server nodes (including the leader)
-5. Continue using the client - it should reconnect automatically
-6. Verify that messages sent before the failure are still available
-7. Verify that you can send new messages (as long as a majority of nodes are still available)
-
-## Multi-Machine Setup
-
-To run the system across multiple machines:
-
-1. Update the `config.yaml` file with the actual hostnames or IP addresses of each machine
-2. Ensure all machines can reach each other over the network
-3. Start the nodes on their respective machines using the same configuration
-
-Example configuration for multiple machines:
-
-```yaml
-nodes:
-  - id: "1"
-    host: "192.168.1.101"  # First machine's IP
-    port: 50051
-    db_path: "node_1.db"
-  
-  - id: "2"
-    host: "192.168.1.102"  # Second machine's IP
-    port: 50051
-    db_path: "node_1.db"
-  
-  - id: "3"
-    host: "192.168.1.103"  # Third machine's IP
-    port: 50051
-    db_path: "node_1.db"
+```bash
+pip install -r requirements.txt
 ```
 
-## Implementation Details
+3. Make sure you are already cded in the hw4 folder and then generate gRPC code from protocol buffers:
 
-### Server Components
+```bash
+python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.proto
+```
 
-- `node.py`: Core node implementation with Raft consensus logic
-- `chat_service.py`: Handles client-server communication
-- `replication_service.py`: Handles server-server communication
-- `server.py`: Entry point for starting a server node
+### Running a Server Cluster
 
-### Client Components
+1. Start the first server (as the leader):
 
-- `client.py`: Fault-tolerant client implementation with GUI
+```bash
+python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1
+```
 
-### Communication
+2. Start additional servers (joining the leader):
 
-- gRPC for all communication (client-server and server-server)
-- Protocol Buffers for message serialization
+```bash
+python server/run_server.py --id server2 --port 8002 --data-dir ./data/server2 --join localhost:8001
+python server/run_server.py --id server3 --port 8003 --data-dir ./data/server3 --join localhost:8001
+```
 
-## Limitations and Future Improvements
+Alternatively, you can use a configuration file:
 
-- Currently implements a simplified version of the Raft consensus algorithm
-- No automatic log compaction/snapshotting
-- No dynamic node membership changes
-- Simplified security (no encryption, authentication beyond username/password)
+```bash
+python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1 --config-file cluster_config.json
+```
 
-## Acknowledgements
+Where `cluster_config.json` contains:
 
-This implementation is based on the principles described in the Raft consensus algorithm paper:
-"In Search of an Understandable Consensus Algorithm" by Diego Ongaro and John Ousterhout.
+```json
+{
+  "servers": {
+    "server1": "localhost:8001",
+    "server2": "localhost:8002",
+    "server3": "localhost:8003"
+  }
+}
+```
+
+### Using the CLI Client
+
+Connect to the server cluster:
+
+```bash
+python client/cli_client.py --servers localhost:8001,localhost:8002,localhost:8003
+```
+
+The CLI supports commands like:
+- `register <username> <password>` - Register a new user
+- `login <username> <password>` - Log in to the chat system
+- `send <recipient> <message>` - Send a message
+- `messages [count]` - List received messages
+- `status` - Show cluster status
+- `help` - Show available commands
+
+We implement a consensus module that follows this format:
+
+1. **Leader Election**:
+   - Timeout-based leader election. We use a random timeout to avoid split votes.
+   - As indicated above, we use randomized election timeouts to avoid split votes.
+   - Term-based voting to ensure safety.
+
+2. **Log Replication**:
+   - Append-only log structure.
+   - Leader-driven replication.
+   - Commit index tracking.
+
+3. **Cluster Membership**:
+   - Single-server changes for safety. This means that we only allow a single server to change the state of the cluster.
+   - Joint consensus for configuration changes. Thus, the joint consensus works by having a majority of the servers agree on the new configuration.
+
+## Fault Tolerance Capabilities
+
+The system can handle:
+
+1. **Server Failures**:
+   - Automatic leader election when leader fails.
+   - Clients automatically reconnect to available servers.
+   - Log replication ensures no data loss. Since logs are replicated to all servers, we can recover from a server failure by having the other servers replicate the log to the new server.
+
+2. **Network Partitions**:
+   - Only the majority partition can make progress.
+
+3. **Process Crashes**:
+   - Persistent storage enables recovery after crashes.
+   - Log replay brings servers back to consistent state.
+
+## Running Tests
+
+Execute the unit tests:
+
+```bash
+python -m unittest discover tests
+```
+
+## Implementation Notes
+
+- We used gRPC for efficient bi-directional streaming.
+- We used Protocol Buffers for serialization. This is like JSON, but smaller and faster.
+- All modifications to the chat state go through the log to ensure consistency.
+- Message delivery uses at-least-once semantics with client-side deduplication.
