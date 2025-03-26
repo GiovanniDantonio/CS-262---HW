@@ -70,6 +70,10 @@ class ChatNode:
         self.next_index = {peer: 1 for peer in peers}
         self.match_index = {peer: 0 for peer in peers}
         
+        # Dynamic membership state
+        self.non_voting_members = {}  # server_id -> address
+        self.catchup_status = {}  # server_id -> {'last_index': int, 'status': 'catching_up'|'ready'}
+        
         # Locks
         self.node_lock = threading.RLock()
         self.db_lock = threading.RLock()
@@ -179,13 +183,136 @@ class ChatNode:
             self.next_index = {peer: len(self.log) + 1 for peer in self.peers}
             self.match_index = {peer: 0 for peer in self.peers}
             
+            # Initialize non-voting member state
+            for server_id in self.non_voting_members:
+                self.next_index[server_id] = len(self.log) + 1
+                self.match_index[server_id] = 0
+            
             # Send initial empty AppendEntries RPCs (heartbeat)
             self._send_heartbeat()
             
             logger.info(f"Node {self.node_id} became leader for term {self.current_term}")
             
+    def AddServer(self, request, context):
+        """Handle request to add a new server to the cluster."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Not the leader",
+                    leader_id=self.leader_id,
+                    leader_address=self.peers.get(self.leader_id, '')
+                )
+            
+            server_id = request.server_id
+            server_address = request.server_address
+            
+            # Check if server is already a member
+            if server_id in self.peers:
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Server is already a voting member"
+                )
+            
+            if server_id in self.non_voting_members:
+                return pb2.AddServerResponse(
+                    success=False,
+                    message="Server is already a non-voting member"
+                )
+            
+            # Add server as non-voting member
+            self.non_voting_members[server_id] = server_address
+            self.next_index[server_id] = len(self.log) + 1
+            self.match_index[server_id] = 0
+            self.catchup_status[server_id] = {
+                'last_index': 0,
+                'status': 'catching_up'
+            }
+            
+            logger.info(f"Added server {server_id} as non-voting member")
+            
+            return pb2.AddServerResponse(
+                success=True,
+                message="Server added as non-voting member"
+            )
+    
+    def CatchupServer(self, request, context):
+        """Handle catchup request from a non-voting member."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.CatchupResponse(
+                    success=False,
+                    message="Not the leader"
+                )
+            
+            server_id = request.server_id
+            last_log_index = request.last_log_index
+            
+            if server_id not in self.non_voting_members:
+                return pb2.CatchupResponse(
+                    success=False,
+                    message="Server is not a non-voting member"
+                )
+            
+            # Send missing entries
+            entries = []
+            if last_log_index < len(self.log):
+                entries = self.log[last_log_index:]
+            
+            # Update catchup status
+            if entries:
+                self.catchup_status[server_id]['last_index'] = len(self.log)
+            else:
+                # If no entries needed, server is caught up
+                self.catchup_status[server_id]['status'] = 'ready'
+            
+            return pb2.CatchupResponse(
+                success=True,
+                message="Catchup entries sent",
+                entries=entries,
+                leader_commit=self.commit_index
+            )
+    
+    def PromoteServer(self, request, context):
+        """Handle request to promote a non-voting member to voting member."""
+        with self.node_lock:
+            if self.state != 'leader':
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Not the leader"
+                )
+            
+            server_id = request.server_id
+            
+            if server_id not in self.non_voting_members:
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Server is not a non-voting member"
+                )
+            
+            if self.catchup_status[server_id]['status'] != 'ready':
+                return pb2.PromoteServerResponse(
+                    success=False,
+                    message="Server is not ready for promotion"
+                )
+            
+            # Move server from non-voting to voting members
+            server_address = self.non_voting_members.pop(server_id)
+            self.peers[server_id] = server_address
+            
+            # Clean up catchup status
+            del self.catchup_status[server_id]
+            
+            logger.info(f"Promoted server {server_id} to voting member")
+            
+            return pb2.PromoteServerResponse(
+                success=True,
+                message="Server promoted to voting member"
+            )
+            
     def _send_heartbeat(self):
         """Send AppendEntries RPCs to all peers (empty for heartbeat)."""
+        # Send to voting members
         for peer_id, peer_addr in self.peers.items():
             try:
                 channel = grpc.insecure_channel(peer_addr)
@@ -195,6 +322,33 @@ class ChatNode:
                 prev_log_term = 0
                 if prev_log_index > 0 and prev_log_index <= len(self.log):
                     prev_log_term = self.log[prev_log_index - 1]['term']
+                
+                request = pb2.AppendEntriesRequest(
+                    term=self.current_term,
+                    leader_id=self.node_id,
+                    prev_log_index=prev_log_index,
+                    prev_log_term=prev_log_term,
+                    entries=[],
+                    leader_commit=self.commit_index
+                )
+                
+                response = stub.AppendEntries(request, timeout=0.5)
+                
+                if response.term > self.current_term:
+                    self.current_term = response.term
+                    self.state = 'follower'
+                    self.voted_for = None
+                    self._persist_state()
+                    return
+                    
+            except Exception as e:
+                logger.warning(f"Failed to send heartbeat to {peer_id}: {e}")
+                
+        # Send to non-voting members
+        for server_id, addr in self.non_voting_members.items():
+            try:
+                channel = grpc.insecure_channel(addr)
+                stub = pb2_grpc.ReplicationServiceStub(channel)
                 
                 request = pb2.AppendEntriesRequest(
                     term=self.current_term,
