@@ -4,18 +4,18 @@ This script creates and runs a chat server node that can participate
 in the distributed consensus protocol.
 
 Usage:
-    python server.py --id <node_id> --host <host> --port <port> [--config <config_file>]
+    python server.py --node-id <node_id> --port <port> [--peers <peer_addresses>]
 """
 import os
 import sys
 import time
 import yaml
 import json
-import logging
-import argparse
 import threading
-import grpc
+import argparse
 from concurrent import futures
+import grpc
+import sqlite3
 
 # Import the generated protobuf modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -24,13 +24,10 @@ from distributed_chat import distributed_chat_pb2_grpc as pb2_grpc
 from distributed_chat.node import ChatNode
 from distributed_chat.chat_service import ChatService
 from distributed_chat.replication_service import ReplicationService
+from distributed_chat.logging_config import setup_logger, log_error, RPCLogger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("chat_server")
+# Set up logging
+logger = setup_logger("chat_server")
 
 def load_config(config_file, node_id=None):
     """
@@ -44,19 +41,24 @@ def load_config(config_file, node_id=None):
         dict: Configuration dictionary
     """
     try:
-        with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
-        
-        # If node_id is specified, get only that node's config
-        if node_id and 'nodes' in config:
-            for node_config in config['nodes']:
-                if node_config['id'] == node_id:
-                    return node_config
-            raise ValueError(f"Node ID {node_id} not found in config")
-        
-        return config
+        with RPCLogger(logger, "load_config", config_file=config_file, node_id=node_id):
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # If node_id is specified, get only that node's config
+            if node_id and 'nodes' in config:
+                for node_config in config['nodes']:
+                    if node_config['id'] == node_id:
+                        return node_config
+                raise ValueError(f"Node ID {node_id} not found in config")
+            
+            return config
     except Exception as e:
-        logger.error(f"Error loading config: {e}")
+        log_error(logger, e, {
+            'operation': 'load_config',
+            'config_file': config_file,
+            'node_id': node_id
+        })
         if node_id:
             # Return minimal default config for the specified node
             return {
@@ -86,12 +88,13 @@ def get_peer_addresses(config, current_node_id):
     Returns:
         dict: Dictionary of peer_id -> host:port
     """
-    peers = {}
-    for node in config['nodes']:
-        node_id = node['id']
-        if node_id != current_node_id:
-            peers[node_id] = f"{node['host']}:{node['port']}"
-    return peers
+    with RPCLogger(logger, "get_peer_addresses", current_node_id=current_node_id):
+        peers = {}
+        for node in config['nodes']:
+            node_id = node['id']
+            if node_id != current_node_id:
+                peers[node_id] = f"{node['host']}:{node['port']}"
+        return peers
 
 def create_server(node):
     """
@@ -103,101 +106,161 @@ def create_server(node):
     Returns:
         tuple: (server, port) - gRPC server and the port it's listening on
     """
+    with RPCLogger(logger, "create_server", node_id=node.node_id):
+        try:
+            # Create gRPC server
+            server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+            
+            # Add chat service
+            chat_service = ChatService(node)
+            pb2_grpc.add_ChatServiceServicer_to_server(chat_service, server)
+            
+            # Add replication service
+            replication_service = ReplicationService(node)
+            pb2_grpc.add_ReplicationServiceServicer_to_server(replication_service, server)
+            
+            # Add listening port
+            server_address = f"{node.host}:{node.port}"
+            port = server.add_insecure_port(server_address)
+            
+            return server, port
+        except Exception as e:
+            log_error(logger, e, {
+                'operation': 'create_server',
+                'node_id': node.node_id,
+                'host': node.host,
+                'port': node.port
+            })
+            raise
+
+def initialize_database(db_path):
+    """Initialize the database with required tables."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    
+    try:
+        # Create accounts table
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS accounts (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        )
+        """)
+        
+        # Create messages table
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT NOT NULL,
+            recipient TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            read INTEGER DEFAULT 0,
+            FOREIGN KEY (sender) REFERENCES accounts(username),
+            FOREIGN KEY (recipient) REFERENCES accounts(username)
+        )
+        """)
+        
+        conn.commit()
+    finally:
+        conn.close()
+
+class ChatService(pb2_grpc.ChatServiceServicer):
+    def __init__(self, node):
+        self.node = node
+
+    def Register(self, request, context):
+        """
+        Handle user registration.
+        
+        Args:
+            request: UserCredentials protobuf message
+            context: gRPC context
+            
+        Returns:
+            Response protobuf message
+        """
+        logger.info(f"Register request for: {request.username}")
+        
+        # Check if username already exists (can be done by any node)
+        with self.node.db_lock:
+            conn = sqlite3.connect(self.node.db_path)
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM accounts WHERE username = ?", (request.username,))
+            if c.fetchone():
+                conn.close()
+                return pb2.Response(success=False, message="Username already exists")
+            conn.close()
+        
+        # Forward write operation to leader if we're not the leader
+        with self.node.node_lock:
+            if self.node.state != 'leader':
+                try:
+                    if self.node.leader_id and self.node.leader_id in self.node.peers:
+                        channel = grpc.insecure_channel(self.node.peers[self.node.leader_id])
+                        stub = pb2_grpc.ChatServiceStub(channel)
+                        return stub.Register(request)
+                    else:
+                        return pb2.Response(success=False, message="No leader available")
+                except Exception as e:
+                    logger.error(f"Failed to forward to leader: {e}")
+                    return pb2.Response(success=False, message="Failed to reach leader")
+            
+            # We're the leader - handle the registration
+            try:
+                success = self._append_to_log('REGISTER', {
+                    'username': request.username,
+                    'password': request.password
+                })
+                
+                if success:
+                    return pb2.Response(success=True, message="Registration successful")
+                else:
+                    return pb2.Response(success=False, message="Registration failed")
+            except Exception as e:
+                logger.error(f"Error during registration: {e}")
+                return pb2.Response(success=False, message=str(e))
+
+def main():
+    """Main function to parse arguments and start the server."""
+    parser = argparse.ArgumentParser(description='Start a chat server node')
+    parser.add_argument('--node-id', type=str, required=True, help='Unique node identifier')
+    parser.add_argument('--port', type=int, required=True, help='Port to listen on')
+    parser.add_argument('--peers', type=str, nargs='*', default=[], help='List of peer addresses (host:port)')
+    args = parser.parse_args()
+    
+    # Create peer mapping
+    peer_dict = {}
+    for i, peer in enumerate(args.peers):
+        if i + 1 != int(args.node_id):  # Don't include self in peers
+            peer_dict[str(i + 1)] = peer
+            
+    # Initialize node
+    db_path = f"node_{args.node_id}.db"
+    node = ChatNode(args.node_id, peer_dict, db_path)
+    
     # Create gRPC server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     
-    # Add chat service
+    # Add services
     chat_service = ChatService(node)
+    node.chat_service = chat_service  # Give node reference to chat service
     pb2_grpc.add_ChatServiceServicer_to_server(chat_service, server)
+    pb2_grpc.add_ReplicationServiceServicer_to_server(node, server)
     
-    # Add replication service
-    replication_service = ReplicationService(node)
-    pb2_grpc.add_ReplicationServiceServicer_to_server(replication_service, server)
-    
-    # Add listening port
-    server_address = f"{node.host}:{node.port}"
-    port = server.add_insecure_port(server_address)
-    
-    return server, port
-
-def main():
-    """
-    Main function to parse arguments and start the server.
-    """
-    parser = argparse.ArgumentParser(description='Start a chat server node')
-    parser.add_argument('--id', type=str, help='Node ID')
-    parser.add_argument('--host', type=str, help='Host address to bind to')
-    parser.add_argument('--port', type=int, help='Port to listen on')
-    parser.add_argument('--config', type=str, help='Path to configuration file')
-    parser.add_argument('--db', type=str, help='Path to database file')
-    args = parser.parse_args()
-    
-    # Load configuration
-    if args.config:
-        all_config = load_config(args.config)
-        if args.id:
-            # Get config for specific node
-            node_config = None
-            for node in all_config['nodes']:
-                if node['id'] == args.id:
-                    node_config = node
-                    break
-            if not node_config:
-                raise ValueError(f"Node ID {args.id} not found in config")
-        else:
-            # Use first node in config
-            node_config = all_config['nodes'][0]
-            args.id = node_config['id']
-    else:
-        # Create default config
-        all_config = load_config(None)
-        if args.id:
-            # Create default config for this node
-            node_config = {
-                'id': args.id,
-                'host': args.host or 'localhost',
-                'port': args.port or (50051 + int(args.id)),
-                'db_path': args.db or f'node_{args.id}.db'
-            }
-        else:
-            # Use first node in default config
-            node_config = all_config['nodes'][0]
-            args.id = node_config['id']
-    
-    # Override config with command line arguments
-    if args.host:
-        node_config['host'] = args.host
-    if args.port:
-        node_config['port'] = args.port
-    if args.db:
-        node_config['db_path'] = args.db
-    
-    # Get peer addresses
-    peers = get_peer_addresses(all_config, args.id)
-    
-    # Create node
-    node = ChatNode(
-        node_id=args.id,
-        host=node_config['host'],
-        port=node_config['port'],
-        peers=peers,
-        db_path=node_config['db_path']
-    )
-    
-    # Create and start gRPC server
-    server, port = create_server(node)
+    # Start server
+    address = f"[::]:{args.port}"
+    server.add_insecure_port(address)
     server.start()
     
-    logger.info(f"Server started on {node_config['host']}:{node_config['port']}")
-    logger.info(f"Node ID: {args.id}")
-    logger.info(f"Peers: {peers}")
+    logger.info(f"Server {args.node_id} started on port {args.port}")
+    logger.info(f"Peers: {peer_dict}")
     
     try:
-        # Keep server running
-        while True:
-            time.sleep(60)
+        server.wait_for_termination()
     except KeyboardInterrupt:
-        logger.info("Shutting down server...")
         server.stop(0)
 
 if __name__ == "__main__":

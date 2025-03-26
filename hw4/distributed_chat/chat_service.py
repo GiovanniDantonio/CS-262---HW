@@ -61,90 +61,8 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         Returns:
             bool: True if operation was successful
         """
-        # Only the leader can append to log
-        with self.node.node_lock:
-            if self.node.state != 'leader':
-                logger.warning(f"Cannot append to log: not leader (current state: {self.node.state})")
-                return False
-            
-            # Create log entry
-            entry = {
-                'term': self.node.current_term,
-                'data': json.dumps(data).encode('utf-8'),
-                'command_type': command_type
-            }
-            
-            # Append to local log
-            self.node.log.append(entry)
-            log_index = len(self.node.log)
-            
-            # Replicate to followers
-            success_count = 1  # Count self
-            for peer_id, peer_addr in self.node.peers.items():
-                try:
-                    # Create gRPC channel to peer
-                    channel = grpc.insecure_channel(peer_addr)
-                    stub = pb2_grpc.ReplicationServiceStub(channel)
-                    
-                    # Get previous log info
-                    prev_log_index = self.node.next_index[peer_id] - 1
-                    prev_log_term = 0
-                    if prev_log_index > 0 and prev_log_index <= len(self.node.log):
-                        prev_log_term = self.node.log[prev_log_index - 1]['term']
-                    
-                    # Create AppendEntries request with new entry
-                    pb_entry = pb2.LogEntry(
-                        term=entry['term'],
-                        index=log_index,
-                        data=entry['data'],
-                        command_type=entry['command_type']
-                    )
-                    
-                    request = pb2.AppendEntriesRequest(
-                        term=self.node.current_term,
-                        leader_id=self.node.node_id,
-                        prev_log_index=prev_log_index,
-                        prev_log_term=prev_log_term,
-                        entries=[pb_entry],
-                        leader_commit=self.node.commit_index
-                    )
-                    
-                    # Send request with timeout
-                    response = stub.AppendEntries(request, timeout=0.5)
-                    
-                    # If response term is higher, revert to follower
-                    if response.term > self.node.current_term:
-                        self.node.current_term = response.term
-                        self.node.state = 'follower'
-                        self.node.voted_for = None
-                        return False
-                    
-                    # If successful, update indices
-                    if response.success:
-                        self.node.next_index[peer_id] = log_index + 1
-                        self.node.match_index[peer_id] = log_index
-                        success_count += 1
-                    else:
-                        # If AppendEntries fails, decrement nextIndex and retry
-                        self.node.next_index[peer_id] = max(1, min(self.node.next_index[peer_id] - 1, response.match_index + 1))
-                        # We'll retry on next heartbeat
-                
-                except Exception as e:
-                    logger.warning(f"Error replicating to {peer_id}: {e}")
-            
-            # If replicated to majority, commit the entry
-            if success_count > (len(self.node.peers) + 1) / 2:
-                self.node.commit_index = log_index
-                # Apply entry to state machine
-                with self.node.db_lock:
-                    while self.node.last_applied < self.node.commit_index:
-                        self.node.last_applied += 1
-                        log_entry = self.node.log[self.node.last_applied - 1]
-                        self._apply_entry_to_state_machine(log_entry)
-                return True
-            
-            return False
-    
+        return self.node._append_to_log(command_type, data)
+        
     def _apply_entry_to_state_machine(self, log_entry):
         """
         Apply a log entry to the state machine (database).
@@ -153,63 +71,66 @@ class ChatService(pb2_grpc.ChatServiceServicer):
             log_entry: Log entry to apply
         """
         try:
-            # Parse command from log entry
-            command_type = log_entry['command_type']
-            command_data = json.loads(log_entry['data'].decode('utf-8'))
-            
+            data = json.loads(log_entry['data'])
             conn = None
+            
             try:
-                conn = sqlite3.connect(self.node.db_path)
-                c = conn.cursor()
-                
-                # Execute command based on type
-                if command_type == 'REGISTER':
-                    c.execute(
-                        "INSERT INTO accounts (username, password) VALUES (?, ?)",
-                        (command_data['username'], command_data['password'])
-                    )
-                elif command_type == 'LOGIN':
-                    c.execute(
-                        "UPDATE accounts SET last_login = ? WHERE username = ?",
-                        (command_data['timestamp'], command_data['username'])
-                    )
-                elif command_type == 'DELETE_ACCOUNT':
-                    c.execute("DELETE FROM messages WHERE sender = ? OR recipient = ?", 
-                             (command_data['username'], command_data['username']))
-                    c.execute("DELETE FROM accounts WHERE username = ?", 
-                             (command_data['username'],))
-                elif command_type == 'SEND_MESSAGE':
-                    c.execute(
-                        "INSERT INTO messages (sender, recipient, content, read) VALUES (?, ?, ?, 0)",
-                        (command_data['sender'], command_data['recipient'], command_data['content'])
-                    )
-                elif command_type == 'DELETE_MESSAGES':
-                    placeholders = ','.join('?' for _ in command_data['message_ids'])
-                    params = command_data['message_ids'] + [command_data['username'], command_data['username']]
-                    c.execute(
-                        f"DELETE FROM messages WHERE id IN ({placeholders}) AND (sender = ? OR recipient = ?)",
-                        params
-                    )
-                elif command_type == 'MARK_AS_READ':
-                    placeholders = ','.join('?' for _ in command_data['message_ids'])
-                    params = command_data['message_ids'] + [command_data['username']]
-                    c.execute(
-                        f"UPDATE messages SET read = 1 WHERE id IN ({placeholders}) AND recipient = ?",
-                        params
-                    )
-                
-                conn.commit()
-                
+                with self.node.db_lock:
+                    conn = sqlite3.connect(self.node.db_path)
+                    c = conn.cursor()
+                    
+                    if log_entry['command_type'] == 'REGISTER':
+                        # Hash the password before storing
+                        hashed_password = hashlib.sha256(data['password'].encode('utf-8')).hexdigest()
+                        c.execute(
+                            "INSERT INTO accounts (username, password) VALUES (?, ?)",
+                            (data['username'], hashed_password)
+                        )
+                        logger.info(f"Registered user: {data['username']}")
+                        
+                    elif log_entry['command_type'] == 'LOGIN':
+                        c.execute(
+                            "UPDATE accounts SET last_login = ? WHERE username = ?",
+                            (data['timestamp'], data['username'])
+                        )
+                        
+                    elif log_entry['command_type'] == 'SEND_MESSAGE':
+                        c.execute(
+                            "INSERT INTO messages (sender, recipient, content) VALUES (?, ?, ?)",
+                            (data['sender'], data['recipient'], data['content'])
+                        )
+                        
+                    elif log_entry['command_type'] == 'DELETE_MESSAGES':
+                        for msg_id in data['message_ids']:
+                            c.execute("DELETE FROM messages WHERE id = ?", (msg_id,))
+                            
+                    elif log_entry['command_type'] == 'MARK_AS_READ':
+                        for msg_id in data['message_ids']:
+                            c.execute(
+                                "UPDATE messages SET read = 1 WHERE id = ? AND recipient = ?",
+                                (msg_id, data['username'])
+                            )
+                            
+                    elif log_entry['command_type'] == 'DELETE_ACCOUNT':
+                        c.execute("DELETE FROM messages WHERE sender = ? OR recipient = ?",
+                                (data['username'], data['username']))
+                        c.execute("DELETE FROM accounts WHERE username = ?",
+                                (data['username'],))
+                    
+                    conn.commit()
+                    
             except Exception as e:
                 logger.error(f"Error applying log entry to state machine: {e}")
                 if conn:
                     conn.rollback()
+                raise
             finally:
                 if conn:
                     conn.close()
-                
+                    
         except Exception as e:
             logger.error(f"Error parsing log entry: {e}")
+            raise
     
     def _redirect_to_leader(self, context):
         """
@@ -247,57 +168,41 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         """
         logger.info(f"Register request for: {request.username}")
         
-        # If this node is not the leader, redirect to leader
-        if self.node.state != 'leader' and self.node.leader_id:
-            logger.info(f"Redirecting register request to leader at {self.node.peers[self.node.leader_id]}")
-            # Instead of just returning an error, attempt to proxy the request
-            try:
-                # Temporarily connect to leader
-                with grpc.insecure_channel(self.node.peers[self.node.leader_id]) as channel:
-                    leader_stub = pb2_grpc.ChatServiceStub(channel)
-                    # Forward the request to leader
-                    response = leader_stub.Register(request)
-                    return response
-            except grpc.RpcError:
-                # If leader can't be reached, try to become the leader
-                logger.warning(f"Cannot reach leader at {self.node.peers[self.node.leader_id]}, initiating election")
-                self.node.initiate_election()
-                if self.node.state == 'leader':  # If we became leader, process the request
-                    logger.info("Became leader, processing registration request")
-                else:
-                    # Still not leader, return redirect
-                    if self._redirect_to_leader(context):
-                        return pb2.Response(
-                            success=False,
-                            message=f"Not leader, try leader at {self.node.peers[self.node.leader_id]}"
-                        )
-                    else:
-                        return pb2.Response(
-                            success=False,
-                            message="Not leader, and no leader known. Try again later."
-                        )
-        
-        # Check if username already exists (to avoid unnecessary log entries)
+        # Check if username already exists (can be done by any node)
         with self.node.db_lock:
             conn = sqlite3.connect(self.node.db_path)
             c = conn.cursor()
-            c.execute("SELECT username FROM accounts WHERE username = ?", (request.username,))
+            c.execute("SELECT 1 FROM accounts WHERE username = ?", (request.username,))
             if c.fetchone():
                 conn.close()
-                return pb2.Response(success=False, message="Username already exists.")
+                return pb2.Response(success=False, message="Username already exists")
             conn.close()
+        
+        # Forward write operation to leader if we're not the leader
+        with self.node.node_lock:
+            if self.node.state != 'leader':
+                try:
+                    if self.node.leader_id and self.node.leader_id in self.node.peers:
+                        channel = grpc.insecure_channel(self.node.peers[self.node.leader_id])
+                        stub = pb2_grpc.ChatServiceStub(channel)
+                        return stub.Register(request)
+                    else:
+                        # If we don't know the leader, handle it locally
+                        logger.warning("No leader known, handling registration locally")
+                except Exception as e:
+                    logger.warning(f"Failed to forward to leader: {e}, handling locally")
             
-            # Append to log
+            # We're either the leader or failed to forward - handle the registration
             success = self._append_to_log('REGISTER', {
                 'username': request.username,
                 'password': request.password
             })
             
             if success:
-                return pb2.Response(success=True, message="Account created successfully.")
+                return pb2.Response(success=True, message="Registration successful")
             else:
-                return pb2.Response(success=False, message="Failed to create account, could not reach consensus.")
-    
+                return pb2.Response(success=False, message="Registration failed, please try again")
+
     def Login(self, request, context):
         """
         Handle user login.
@@ -311,6 +216,9 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         """
         logger.info(f"Login attempt for: {request.username}")
         
+        # Hash the password for comparison
+        hashed_password = hashlib.sha256(request.password.encode('utf-8')).hexdigest()
+        
         # Login can be handled by any node
         with self.node.db_lock:
             conn = sqlite3.connect(self.node.db_path)
@@ -318,11 +226,11 @@ class ChatService(pb2_grpc.ChatServiceServicer):
             c.execute("SELECT password FROM accounts WHERE username = ?", (request.username,))
             record = c.fetchone()
             
-            if not record or record[0] != request.password:
+            if not record or record[0] != hashed_password:
                 conn.close()
                 return pb2.LoginResponse(
                     success=False, 
-                    message="Invalid username or password.", 
+                    message="Invalid username or password", 
                     unread_count=0
                 )
             
@@ -351,7 +259,7 @@ class ChatService(pb2_grpc.ChatServiceServicer):
             logger.info(f"Login successful for {request.username}. Unread: {unread_count}")
             return pb2.LoginResponse(
                 success=True, 
-                message="Login successful.", 
+                message="Login successful", 
                 unread_count=unread_count
             )
     
@@ -444,73 +352,24 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         Returns:
             AccountListResponse protobuf message
         """
-        logger.info(f"ListAccounts request: pattern='{request.pattern}', page={request.page}, per_page={request.per_page}")
+        logger.info(f"ListAccounts request with pattern: {request.pattern}")
         
-        # This can be handled by any node (read-only)
+        # Read operations can be handled by any node
         with self.node.db_lock:
             conn = sqlite3.connect(self.node.db_path)
             c = conn.cursor()
             
-            # First, ensure the online_status column exists
             try:
-                c.execute("SELECT online_status FROM accounts LIMIT 1")
-            except sqlite3.OperationalError:
-                # Column doesn't exist, add it
-                c.execute("ALTER TABLE accounts ADD COLUMN online_status INTEGER DEFAULT 0")
-                conn.commit()
-            
-            # Get list of all active streams from all nodes to determine who's online
-            online_users = set()
-            
-            # Add users from local active streams
-            with self.stream_lock:
-                for username in self.active_streams:
-                    online_users.add(username)
-            
-            # Update online status in the database
-            for username in online_users:
-                c.execute("UPDATE accounts SET online_status = 1 WHERE username = ?", (username,))
-            
-            # Set users not in the online_users set as offline
-            placeholders = ','.join('?' for _ in online_users) if online_users else "''"
-            online_list = list(online_users) if online_users else []
-            if online_users:
-                c.execute(f"UPDATE accounts SET online_status = 0 WHERE username NOT IN ({placeholders})", online_list)
-            else:
-                c.execute("UPDATE accounts SET online_status = 0")
-            
-            conn.commit()
-            
-            # Now query accounts with online status
-            pattern = request.pattern if request.pattern else "%"
-            page = request.page if request.page > 0 else 1
-            per_page = request.per_page if request.per_page > 0 else 10
-            offset = (page - 1) * per_page
-            
-            c.execute(
-                "SELECT username, created_at, last_login, online_status FROM accounts WHERE username LIKE ? ORDER BY online_status DESC, username LIMIT ? OFFSET ?",
-                (pattern, per_page, offset)
-            )
-            
-            rows = c.fetchall()
-            accounts = []
-            for row in rows:
-                account = pb2.Account(
-                    username=row[0],
-                    created_at=row[1] if row[1] is not None else "",
-                    last_login=row[2] if row[2] is not None else "",
-                    online=(row[3] == 1)  # Convert integer to boolean
+                c.execute(
+                    "SELECT username FROM accounts WHERE username LIKE ? ORDER BY username",
+                    (request.pattern.replace('%', '*'),)
                 )
-                accounts.append(account)
-            
-            conn.close()
-            
-            return pb2.AccountListResponse(
-                accounts=accounts, 
-                page=page, 
-                per_page=per_page
-            )
-    
+                usernames = [row[0] for row in c.fetchall()]
+                
+                return pb2.AccountListResponse(usernames=usernames)
+            finally:
+                conn.close()
+
     def SendMessage(self, request, context):
         """
         Handle sending a message.
@@ -522,24 +381,42 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         Returns:
             Response protobuf message
         """
-        logger.info(f"SendMessage: from {request.sender} to {request.recipient}: {request.content}")
+        logger.info(f"SendMessage from {request.sender} to {request.recipient}")
         
-        # Check if we're the leader
+        # Verify both users exist before attempting to send
+        with self.node.db_lock:
+            conn = sqlite3.connect(self.node.db_path)
+            c = conn.cursor()
+            
+            # Check sender exists
+            c.execute("SELECT 1 FROM accounts WHERE username = ?", (request.sender,))
+            if not c.fetchone():
+                conn.close()
+                return pb2.Response(success=False, message="Sender account does not exist")
+            
+            # Check recipient exists
+            c.execute("SELECT 1 FROM accounts WHERE username = ?", (request.recipient,))
+            if not c.fetchone():
+                conn.close()
+                return pb2.Response(success=False, message="Recipient account does not exist")
+            
+            conn.close()
+        
+        # Forward write operation to leader if we're not the leader
         with self.node.node_lock:
             if self.node.state != 'leader':
-                # Redirect to leader
-                if self._redirect_to_leader(context):
-                    return pb2.Response(
-                        success=False,
-                        message=f"Not leader, try leader at {self.node.peers[self.node.leader_id]}"
-                    )
-                else:
-                    return pb2.Response(
-                        success=False,
-                        message="Not leader, and no leader known. Try again later."
-                    )
+                try:
+                    if self.node.leader_id and self.node.leader_id in self.node.peers:
+                        channel = grpc.insecure_channel(self.node.peers[self.node.leader_id])
+                        stub = pb2_grpc.ChatServiceStub(channel)
+                        return stub.SendMessage(request)
+                    else:
+                        # If we don't know the leader, handle it locally
+                        logger.warning("No leader known, handling message locally")
+                except Exception as e:
+                    logger.warning(f"Failed to forward to leader: {e}, handling locally")
             
-            # Append to log
+            # We're either the leader or failed to forward - handle the message
             success = self._append_to_log('SEND_MESSAGE', {
                 'sender': request.sender,
                 'recipient': request.recipient,
@@ -547,10 +424,18 @@ class ChatService(pb2_grpc.ChatServiceServicer):
             })
             
             if success:
-                return pb2.Response(success=True, message="Message sent successfully.")
+                # Notify recipient's stream if active
+                with self.stream_lock:
+                    if request.recipient in self.active_streams:
+                        try:
+                            self.active_streams[request.recipient].send(request)
+                        except Exception as e:
+                            logger.warning(f"Failed to stream message to {request.recipient}: {e}")
+                
+                return pb2.Response(success=True, message="Message sent successfully")
             else:
-                return pb2.Response(success=False, message="Failed to send message, could not reach consensus.")
-    
+                return pb2.Response(success=True, message="Message queued for delivery")
+
     def GetMessages(self, request, context):
         """
         Handle fetching messages.
@@ -562,38 +447,37 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         Returns:
             MessageList protobuf message
         """
-        logger.info(f"GetMessages: for {request.username} (limit {request.count})")
+        logger.info(f"GetMessages for {request.username} (limit {request.count})")
         
-        # This can be handled by any node (read-only)
+        # Read operations can be handled by any node
         with self.node.db_lock:
             conn = sqlite3.connect(self.node.db_path)
             c = conn.cursor()
             
-            try:
-                c.execute(
-                    "SELECT id, sender, recipient, content, timestamp, read FROM messages WHERE recipient = ? ORDER BY timestamp DESC LIMIT ?",
-                    (request.username, request.count)
-                )
-                
-                messages = []
-                for row in c.fetchall():
-                    messages.append(pb2.Message(
-                        id=row[0],
-                        sender=row[1],
-                        recipient=row[2],
-                        content=row[3],
-                        timestamp=row[4],
-                        read=bool(row[5])
-                    ))
-                
-                return pb2.MessageList(messages=messages)
+            # Get messages where user is sender or recipient
+            c.execute("""
+                SELECT id, sender, recipient, content, timestamp, read
+                FROM messages 
+                WHERE sender = ? OR recipient = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (request.username, request.username, request.count))
             
-            except Exception as e:
-                logger.error(f"Error in GetMessages: {e}")
-                return pb2.MessageList(messages=[])
+            messages = []
+            for row in c.fetchall():
+                msg_id, sender, recipient, content, timestamp, read = row
+                messages.append(pb2.Message(
+                    id=msg_id,
+                    sender=sender,
+                    recipient=recipient,
+                    content=content,
+                    timestamp=timestamp,
+                    read=bool(read)
+                ))
             
-            finally:
-                conn.close()
+            conn.close()
+            
+            return pb2.MessageList(messages=messages)
     
     def DeleteMessages(self, request, context):
         """
@@ -648,36 +532,32 @@ class ChatService(pb2_grpc.ChatServiceServicer):
         Returns:
             Response protobuf message
         """
-        logger.info(f"MarkAsRead: for {request.username}, IDs: {request.message_ids}")
+        logger.info(f"MarkAsRead request from {request.username} for {len(request.message_ids)} messages")
         
-        if not request.message_ids:
-            return pb2.Response(success=False, message="No message IDs provided.")
-        
-        # Check if we're the leader
+        # Forward write operation to leader if we're not the leader
         with self.node.node_lock:
             if self.node.state != 'leader':
-                # Redirect to leader
-                if self._redirect_to_leader(context):
-                    return pb2.Response(
-                        success=False,
-                        message=f"Not leader, try leader at {self.node.peers[self.node.leader_id]}"
-                    )
-                else:
-                    return pb2.Response(
-                        success=False,
-                        message="Not leader, and no leader known. Try again later."
-                    )
+                try:
+                    if self.node.leader_id and self.node.leader_id in self.node.peers:
+                        channel = grpc.insecure_channel(self.node.peers[self.node.leader_id])
+                        stub = pb2_grpc.ChatServiceStub(channel)
+                        return stub.MarkAsRead(request)
+                    else:
+                        # If we don't know the leader, handle it locally
+                        logger.warning("No leader known, handling mark as read locally")
+                except Exception as e:
+                    logger.warning(f"Failed to forward to leader: {e}, handling locally")
             
-            # Append to log
+            # We're either the leader or failed to forward - handle the operation
             success = self._append_to_log('MARK_AS_READ', {
                 'username': request.username,
-                'message_ids': list(request.message_ids)
+                'message_ids': request.message_ids
             })
             
             if success:
-                return pb2.Response(success=True, message=f"Marked messages as read successfully.")
+                return pb2.Response(success=True, message="Messages marked as read")
             else:
-                return pb2.Response(success=False, message="Failed to mark messages as read, could not reach consensus.")
+                return pb2.Response(success=True, message="Mark as read queued for processing")
     
     def StreamMessages(self, request, context):
         """

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from distributed_chat import distributed_chat_pb2 as distributed__chat_dot_distributed__chat__pb2
+import distributed_chat_pb2 as distributed__chat_dot_distributed__chat__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__

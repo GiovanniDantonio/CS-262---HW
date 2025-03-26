@@ -7,7 +7,6 @@ import os
 import sys
 import time
 import json
-import logging
 import hashlib
 import threading
 import grpc
@@ -19,13 +18,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from distributed_chat import distributed_chat_pb2 as pb2
 from distributed_chat import distributed_chat_pb2_grpc as pb2_grpc
+from distributed_chat.logging_config import setup_logger, log_error, RPCLogger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("chat_client")
+# Set up logging
+logger = setup_logger("chat_client")
 
 def hash_password(password: str) -> str:
     """Hash a password using SHA-256."""
@@ -75,42 +71,44 @@ class FaultTolerantClient:
                 return False
                 
             try:
-                # Close existing channel if any
-                if self.channel:
-                    try:
-                        self.channel.close()
-                    except Exception:
-                        pass
-                
-                logger.info(f"Connecting to server at {self.current_server}")
-                
-                # Create new connection with timeout
-                options = [
-                    ('grpc.max_send_message_length', 10 * 1024 * 1024),
-                    ('grpc.max_receive_message_length', 10 * 1024 * 1024),
-                    ('grpc.keepalive_time_ms', 10000),  # Send keepalive ping every 10 seconds
-                    ('grpc.keepalive_timeout_ms', 5000),  # Keepalive ping timeout after 5 seconds
-                    ('grpc.keepalive_permit_without_calls', True),  # Allow keepalive pings when no calls are in-flight
-                    ('grpc.http2.max_pings_without_data', 0),  # Allow unlimited pings without data
-                    ('grpc.enable_retries', 1),  # Enable retries
-                ]
-                self.channel = grpc.insecure_channel(self.current_server, options=options)
-                
-                # Set a deadline for the connection attempt
-                grpc.channel_ready_future(self.channel).result(timeout=5)
-                
-                # Create stub for client-server communication
-                self.stub = pb2_grpc.ChatServiceStub(self.channel)
-                
-                # Reset backoff on successful connection
-                self.reconnect_backoff = 1.0
-                self.last_connect_attempt[self.current_server] = time.time()
-                
-                logger.info(f"Successfully connected to {self.current_server}")
-                return True
-                
+                with RPCLogger(logger, "connect", server=self.current_server):
+                    # Close existing channel if any
+                    if self.channel:
+                        try:
+                            self.channel.close()
+                        except Exception as e:
+                            logger.warning(f"Error closing channel: {e}")
+                    
+                    # Create new connection with timeout
+                    options = [
+                        ('grpc.max_send_message_length', 10 * 1024 * 1024),
+                        ('grpc.max_receive_message_length', 10 * 1024 * 1024),
+                        ('grpc.keepalive_time_ms', 10000),
+                        ('grpc.keepalive_timeout_ms', 5000),
+                        ('grpc.keepalive_permit_without_calls', True),
+                        ('grpc.http2.max_pings_without_data', 0),
+                        ('grpc.enable_retries', 1),
+                    ]
+                    self.channel = grpc.insecure_channel(self.current_server, options=options)
+                    
+                    # Set a deadline for the connection attempt
+                    grpc.channel_ready_future(self.channel).result(timeout=5)
+                    
+                    # Create stub for client-server communication
+                    self.stub = pb2_grpc.ChatServiceStub(self.channel)
+                    
+                    # Reset backoff on successful connection
+                    self.reconnect_backoff = 1.0
+                    self.last_connect_attempt[self.current_server] = time.time()
+                    
+                    return True
+                    
             except Exception as e:
-                logger.error(f"Failed to connect to {self.current_server}: {e}")
+                log_error(logger, e, {
+                    'operation': 'connect',
+                    'server': self.current_server,
+                    'backoff': self.reconnect_backoff
+                })
                 
                 # Mark this server as recently failed
                 self.last_connect_attempt[self.current_server] = time.time()
@@ -119,7 +117,10 @@ class FaultTolerantClient:
                 if not self._try_next_server():
                     # If all servers failed, increase backoff time
                     self.reconnect_backoff = min(self.reconnect_backoff * 1.5, self.max_backoff)
-                    logger.warning(f"All servers unavailable. Will retry in {self.reconnect_backoff} seconds")
+                    logger.warning(
+                        f"All servers unavailable. Will retry in {self.reconnect_backoff} seconds",
+                        extra={'backoff': self.reconnect_backoff}
+                    )
                 
                 return False
                 
@@ -212,46 +213,42 @@ class FaultTolerantClient:
             RegisterResponse with success status and message
         """
         with self.lock:
-            # Hash password
-            password_hash = hash_password(password)
-            
-            # Create request
-            request = pb2.UserCredentials(
-                username=username,
-                password=password_hash
-            )
-            
-            # Retry loop with backoff
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    response = self.stub.Register(request)
-                    
-                    # If not leader, try redirecting
-                    if not response.success and self._handle_not_leader(response):
-                        # Retry with new leader
+            with RPCLogger(logger, "register", username=username):
+                # Hash password
+                password_hash = hash_password(password)
+                
+                # Create request
+                request = pb2.UserCredentials(
+                    username=username,
+                    password=password_hash
+                )
+                
+                # Retry loop with backoff
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
                         response = self.stub.Register(request)
-                    
-                    return response
-                    
-                except grpc.RpcError as e:
-                    logger.error(f"RPC Error in register: {e}")
-                    
-                    # Handle server failure
-                    if not self._handle_server_failure("register"):
-                        # If reconnection failed, return error response
-                        return pb2.RegisterResponse(
-                            success=False,
-                            message=f"Failed to connect to any server after {max_retries} attempts"
-                        )
                         
-                    # If reconnected, continue retry loop
-                    
-            # If all retries failed
-            return pb2.RegisterResponse(
-                success=False,
-                message=f"Failed after {max_retries} attempts"
-            )
+                        # If not leader, try redirecting
+                        if not response.success and self._handle_not_leader(response):
+                            # Retry with new leader
+                            response = self.stub.Register(request)
+                            
+                        return response
+                        
+                    except grpc.RpcError as e:
+                        log_error(logger, e, {
+                            'operation': 'register',
+                            'username': username,
+                            'attempt': attempt + 1,
+                            'max_retries': max_retries
+                        })
+                        
+                        if not self._handle_server_failure("register"):
+                            # If we can't reconnect, raise the error
+                            raise
+                
+                raise Exception(f"Failed to register after {max_retries} attempts")
 
     def call_with_retry(self, method_name, request, retry_count=3):
         """
