@@ -25,21 +25,21 @@ The system is built using the following components:
 
 ```
 hw4/
-├── client/           # Client implementation
-│   ├── client.py     # Client library for application integration
-│   └── cli_client.py # Command-line interface
-├── common/           # Shared modules
-│   ├── persistence.py # Persistence and storage
-│   └── raft.py       # Raft consensus implementation
-├── proto/            # Protocol buffer definitions
-│   └── chat.proto    # Service and message definitions
-├── server/           # Server implementation
-│   ├── server.py     # Main server class
-│   ├── server_handlers.py # Request handlers
-│   └── run_server.py # Server launcher script
-└── tests/            # Unit and integration tests
-    ├── test_raft.py  # Tests for Raft consensus
-    └── test_client.py # Tests for client functionality
+├── distributed_chat/     # Main distributed chat implementation
+│   ├── server.py        # Server implementation with Raft consensus
+│   ├── node.py          # Node implementation for distributed system
+│   ├── client.py        # Client implementation
+│   └── distributed_chat.proto  # Protocol buffer definitions
+├── reg/                 # Registration and authentication service
+│   ├── server.py        # Authentication server
+│   ├── client.py        # Client for auth service
+│   ├── chat.proto       # Auth service protocol definitions
+│   └── tests/           # Test suite
+│       ├── test_client.py    # Client tests
+│       ├── test_db.py        # Database tests
+│       ├── test_protocol.py  # Protocol tests
+│       └── test_server.py    # Server tests
+└── requirements.txt     # Project dependencies
 ```
 
 ### Prerequisites
@@ -71,17 +71,18 @@ python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.p
 
 ### Running a Server Cluster
 
-1. Start the first server (as the leader):
+1. Start the first server:
 
 ```bash
-python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1
+python3 server.py --replica-id 1
 ```
 
 2. Start additional servers (joining the leader):
 
 ```bash
-python server/run_server.py --id server2 --port 8002 --data-dir ./data/server2 --join localhost:8001
-python server/run_server.py --id server3 --port 8003 --data-dir ./data/server3 --join localhost:8001
+source venv/bin/activate && cd reg && python3 server.py --replica-id 2
+source venv/bin/activate && cd reg && python3 client.py
+source ../venv/bin/activate && python3 server.py --replica-id 0
 ```
 
 Alternatively, you can use a configuration file:
@@ -104,26 +105,10 @@ Where `cluster_config.json` contains:
 
 ### Using the CLI Client
 
-Connect to the server cluster:
-
-```bash
-python client/cli_client.py --servers localhost:8001,localhost:8002,localhost:8003
-```
-
-The CLI supports commands like:
-- `register <username> <password>` - Register a new user
-- `login <username> <password>` - Log in to the chat system
-- `send <recipient> <message>` - Send a message
-- `messages [count]` - List received messages
-- `status` - Show cluster status
-- `help` - Show available commands
-
 We implement a consensus module that follows this format:
 
 1. **Leader Election**:
-   - Timeout-based leader election. We use a random timeout to avoid split votes.
-   - As indicated above, we use randomized election timeouts to avoid split votes.
-   - Term-based voting to ensure safety.
+   - Highest id wins.
 
 2. **Log Replication**:
    - Append-only log structure.
@@ -152,11 +137,33 @@ The system can handle:
 
 ## Running Tests
 
-Execute the unit tests:
+To run the test suite:
 
 ```bash
-python -m unittest discover tests
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all tests
+python -m pytest reg/tests/
+
+# Run specific test files
+python -m pytest reg/tests/test_client.py
+python -m pytest reg/tests/test_server.py
+python -m pytest reg/tests/test_protocol.py
+python -m pytest reg/tests/test_db.py
+
+# Run tests with verbose output
+python -m pytest -v reg/tests/
+
+# Run tests and show coverage
+python -m pytest --cov=reg reg/tests/
 ```
+
+The test suite includes:
+- Client functionality tests (authentication, message sending)
+- Server functionality tests (request handling, state management)
+- Database tests (persistence, data integrity)
+- Protocol tests (message serialization, protocol compliance)
 
 ## Implementation Notes
 
@@ -164,6 +171,3 @@ python -m unittest discover tests
 - We used Protocol Buffers for serialization. This is like JSON, but smaller and faster.
 - All modifications to the chat state go through the log to ensure consistency.
 - Message delivery uses at-least-once semantics with client-side deduplication.
-
-
-

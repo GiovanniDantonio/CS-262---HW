@@ -1,7 +1,7 @@
 import unittest
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from protocol import MessageType, StatusCode, create_message, validate_message
@@ -33,7 +33,7 @@ class TestProtocol(unittest.TestCase):
         message = {
             "type": MessageType.LOGIN.value,
             "data": {"username": "testuser"},
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status": StatusCode.PENDING.value
         }
         self.assertTrue(validate_message(message))
@@ -53,7 +53,7 @@ class TestProtocol(unittest.TestCase):
         message = {
             "type": "invalid_type",
             "data": {"username": "testuser"},
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status": StatusCode.PENDING.value
         }
         self.assertFalse(validate_message(message))
@@ -63,7 +63,7 @@ class TestProtocol(unittest.TestCase):
         message = {
             "type": MessageType.LOGIN.value,
             "data": {"username": "testuser"},
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status": "invalid_status"
         }
         self.assertFalse(validate_message(message))

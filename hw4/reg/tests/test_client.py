@@ -4,6 +4,7 @@ import os
 import tkinter as tk
 from unittest.mock import MagicMock, patch
 import json
+import tempfile
 
 # Adjust the path so we can import the client module.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -26,23 +27,37 @@ class TestChatClient(unittest.TestCase):
         Create a ChatClient instance and override its gRPC stub with a MagicMock.
         Also, patch the UI elements so that we can simulate user input.
         """
-        self.client = ChatClient(self.root)
-        # Override the gRPC stub with a MagicMock to simulate responses.
+        # Create a temporary config file
+        self.temp_config = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        config = {
+            "server_address": "localhost:50051",
+            "retry_interval": 5,
+            "max_retries": 3
+        }
+        json.dump(config, self.temp_config)
+        self.temp_config.close()
+        
+        # Patch the config file path
+        with patch('client.CLIENT_CONFIG', self.temp_config.name):
+            self.client = ChatClient(self.root)
+            
+        # Override the gRPC stub with a MagicMock to simulate responses
         self.client.stub = MagicMock()
         
-        # For login, the username and password entries are created in create_login_widgets().
-        self.client.username_entry.get = MagicMock()
-        self.client.password_entry.get = MagicMock()
-        # For sending messages, ensure chat widget entries exist.
+        # Mock UI elements
+        self.client.username_entry = MagicMock()
+        self.client.username_entry.get = MagicMock(return_value="testuser")
+        self.client.password_entry = MagicMock()
+        self.client.password_entry.get = MagicMock(return_value="testpass")
         self.client.recipient_entry = MagicMock()
-        self.client.recipient_entry.get = MagicMock()
+        self.client.recipient_entry.get = MagicMock(return_value="recipient")
         self.client.message_entry = MagicMock()
-        self.client.message_entry.get = MagicMock()
-        # Also stub out the delete method for the message_entry.
+        self.client.message_entry.get = MagicMock(return_value="test message")
         self.client.message_entry.delete = MagicMock()
 
     def tearDown(self):
-        pass
+        """Clean up temporary files."""
+        os.unlink(self.temp_config.name)
 
     def test_client_connection(self):
         """
