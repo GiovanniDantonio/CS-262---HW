@@ -7,6 +7,8 @@ import hashlib
 import logging
 from datetime import datetime
 import threading
+import json
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -25,16 +27,71 @@ class ChatClient:
         self.master.title("Chat Client - Login")
         self.master.geometry("600x800")
         self.username = None
-
-        # gRPC channel and stub (using client_config.json host/port if desired)
-        self.channel = grpc.insecure_channel("localhost:50051")
-        self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
-
+        
+        # Read base configuration
+        self.config = self._load_config()
+        self.base_addr = f"{self.config['host']}:{self.config['port']}"
+        
+        # Initialize connection with automatic retry capability
+        self._initialize_connection()
+        
         self.stop_event = threading.Event()
         self.listener_thread = None
-
-        # Build login UI; do not start listener yet
+        
+        # Build login UI
         self.create_login_widgets()
+
+    def _load_config(self):
+        """Load client configuration."""
+        with open("client_config.json", 'r') as f:
+            return json.load(f)
+
+    def _initialize_connection(self):
+        """Initialize gRPC connection with automatic retry and reconnection."""
+        # Create channel with automatic reconnection options
+        self.channel = grpc.insecure_channel(
+            self.base_addr,
+            options=[
+                ('grpc.enable_retries', 1),
+                ('grpc.keepalive_time_ms', 10000),
+                ('grpc.keepalive_timeout_ms', 5000),
+                ('grpc.keepalive_permit_without_calls', 1),
+                ('grpc.http2.max_pings_without_data', 0),
+                ('grpc.http2.min_time_between_pings_ms', 10000),
+                ('grpc.http2.min_ping_interval_without_data_ms', 5000)
+            ]
+        )
+        self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
+        
+        # Add channel connectivity callback
+        self._setup_connectivity_monitoring()
+
+    def _setup_connectivity_monitoring(self):
+        """Setup monitoring of channel connectivity with automatic reconnection."""
+        def _on_connectivity_change(connectivity):
+            if connectivity in [grpc.ChannelConnectivity.TRANSIENT_FAILURE, 
+                              grpc.ChannelConnectivity.SHUTDOWN]:
+                logger.info("Connection lost, attempting to reconnect...")
+                self.channel.subscribe(_on_connectivity_change, try_to_connect=True)
+            elif connectivity == grpc.ChannelConnectivity.READY:
+                logger.info("Successfully connected to server")
+
+        self.channel.subscribe(_on_connectivity_change, try_to_connect=True)
+
+    def _wrap_grpc_call(self, func, *args, **kwargs):
+        """Wrapper for gRPC calls with automatic retry on failure."""
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except grpc.RpcError as e:
+                if attempt == max_retries - 1:
+                    raise e
+                logger.warning(f"RPC failed, attempt {attempt + 1}/{max_retries}. Retrying...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
 
     def clear_window(self):
         for widget in self.master.winfo_children():
@@ -125,37 +182,40 @@ class ChatClient:
 
     # --- gRPC Methods ---
     def register(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
+        """Wrapped register call with automatic retry."""
+        username = self.username_entry.get()
+        password = self.password_entry.get()
         if not username or not password:
-            messagebox.showwarning("Input Error", "Username and password required.")
+            messagebox.showerror("Error", "Username and password required")
             return
-        logger.debug(f"Registering user: {username}")
+            
         try:
-            response = self.stub.Register(chat_pb2.UserCredentials(
+            request = chat_pb2.UserCredentials(
                 username=username,
                 password=hash_password(password)
-            ))
+            )
+            response = self._wrap_grpc_call(self.stub.Register, request)
             if response.success:
                 messagebox.showinfo("Success", "Account created successfully!")
             else:
                 messagebox.showerror("Error", response.message)
         except grpc.RpcError as e:
-            logger.error(f"gRPC error during registration: {e}")
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", f"Registration failed: {e.details()}")
 
     def login(self):
-        username = self.username_entry.get().strip()
-        password = self.password_entry.get().strip()
+        """Wrapped login call with automatic retry."""
+        username = self.username_entry.get()
+        password = self.password_entry.get()
         if not username or not password:
-            messagebox.showwarning("Input Error", "Username and password required.")
+            messagebox.showerror("Error", "Username and password required")
             return
-        logger.debug(f"Logging in user: {username}")
+            
         try:
-            response = self.stub.Login(chat_pb2.UserCredentials(
+            request = chat_pb2.UserCredentials(
                 username=username,
                 password=hash_password(password)
-            ))
+            )
+            response = self._wrap_grpc_call(self.stub.Login, request)
             if response.success:
                 self.username = username
                 messagebox.showinfo("Success", f"Login successful! You have {response.unread_count} unread messages.")
@@ -165,8 +225,7 @@ class ChatClient:
             else:
                 messagebox.showerror("Login Error", response.message)
         except grpc.RpcError as e:
-            logger.error(f"gRPC error during login: {e}")
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror("Error", f"Login failed: {e.details()}")
 
     def list_accounts(self, pattern="%"):
         logger.debug(f"Requesting account list with pattern: {pattern}")
@@ -359,8 +418,6 @@ class ChatClient:
                     self.chat_display.see(children[-1])
             except Exception as e:
                 logger.error(f"Error processing broadcast message for item {item_id}: {e}")
-
-
 
     def start_listener(self):
         self.listener_thread = threading.Thread(target=self.listen_for_messages, daemon=True)

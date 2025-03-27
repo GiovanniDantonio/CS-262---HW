@@ -19,7 +19,7 @@ service ChatService {
 
     // Real-time message streaming.
     // This RPC streams messages to the client automatically.
-    rpc StreamMessages(UserRequest) returns (stream Message);
+    rpc StreamMessages(UserRequest) returns (stream ServerUpdate);
 }
 
 // Messages for user authentication.
@@ -98,4 +98,17 @@ message AccountListResponse {
     repeated Account accounts = 1;
     int32 page = 2;
     int32 per_page = 3;
+}
+
+// Server update message.
+message ServerUpdate {
+    oneof update {
+        Message new_message = 1;
+        LeaderUpdate leader_change = 2;
+    }
+}
+
+// Leader update message.
+message LeaderUpdate {
+    string new_leader_address = 1;
 }
