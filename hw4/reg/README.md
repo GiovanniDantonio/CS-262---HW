@@ -1,115 +1,173 @@
-# Distributed Chat Application
+# Fault-Tolerant Chat System
 
-A fault-tolerant, distributed chat application built with gRPC and Python. The system supports multiple chat servers with automatic failover and message persistence.
+A distributed, fault-tolerant chat system that implements reliability and consistency across multiple nodes.
 
-## Prerequisites
+## Features
 
-- Python 3.7 or higher
-- pip (Python package manager)
-- tkinter (usually comes with Python installation)
+- **2-Fault Tolerance**: Continues operating even when two or more servers fail.
+- **Consistency**: Ensures all servers have the same data.
+- **Persistence**: Stores messages and state to disk for durability.
+- **Automatic Failover**: Clients automatically reconnect to available servers.
+- **Server Replication**: Supports multiple server instances in a cluster.
+- **User Authentication**: Supports user registration, login, and account management.
 
-## Setup Instructions
+## Architecture
 
-1. Create and activate a virtual environment:
-   ```bash
-   # Create virtual environment
-   python3 -m venv venv
-   
-   # Activate virtual environment
-   # On macOS/Linux:
-   source venv/bin/activate
-   # On Windows:
-   .\venv\Scripts\activate
-   ```
+The system is built using the following components:
 
-2. Install dependencies:
-   ```bash
-   pip install grpcio grpcio-tools
-   ```
+1. **Consensus Module**: Implements leader election, log replication, and cluster membership.
+2. **Persistence Layer**: Handles durable storage of logs, state, and snapshots.
+3. **gRPC Services**: Provides client-server and server-server communication. This was implemented using the `grpc` library. Also, we used the `grpc_tools.protoc` to generate the gRPC code from the `chat.proto` file. Furthermore, we took our code from the previous homework.
+4. **Client Library**: Manages connections, retries, and automatic failover.
+5. **Command-Line Interface**: Provides a user interface for interacting with the system.
 
-## Running the Application
+## Directory Structure
 
-### 1. Start the Server Replicas
+```
+hw4/
+├── distributed_chat/     # Main distributed chat implementation
+│   ├── server.py        # Server implementation with Raft consensus
+│   ├── node.py          # Node implementation for distributed system
+│   ├── client.py        # Client implementation
+│   └── distributed_chat.proto  # Protocol buffer definitions
+├── reg/                 # Registration and authentication service
+│   ├── server.py        # Authentication server
+│   ├── client.py        # Client for auth service
+│   ├── chat.proto       # Auth service protocol definitions
+│   └── tests/           # Test suite
+│       ├── test_client.py    # Client tests
+│       ├── test_db.py        # Database tests
+│       ├── test_protocol.py  # Protocol tests
+│       └── test_server.py    # Server tests
+└── requirements.txt     # Project dependencies
+```
 
-Start three server replicas in separate terminal windows:
+### Prerequisites
+
+- Python 3.7+
+- gRPC and Protocol Buffers
+
+### Installation
+
+1. Clone the repository
+2. Create a virtual environment and activate it:
 
 ```bash
-# Terminal 1 - Start Replica 0 (Primary)
-python3 server.py --replica-id 0
+python3 -m venv venv
+source venv/bin/activate
+```
 
-# Terminal 2 - Start Replica 1
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. Make sure you are already cded in the hw4 folder and then generate gRPC code from protocol buffers:
+
+```bash
+python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/chat.proto
+```
+
+### Running a Server Cluster
+
+1. Start the first server:
+
+```bash
 python3 server.py --replica-id 1
-
-# Terminal 3 - Start Replica 2
-python3 server.py --replica-id 2
 ```
 
-The servers will start on the following ports:
-- Replica 0: localhost:50051
-- Replica 1: localhost:50052
-- Replica 2: localhost:50053
+2. Start additional servers (joining the leader):
 
-### 2. Start the Chat Client
-
-In a new terminal window:
 ```bash
-python3 client.py
+source venv/bin/activate && cd reg && python3 server.py --replica-id 2
+source venv/bin/activate && cd reg && python3 client.py
+source ../venv/bin/activate && python3 server.py --replica-id 0
 ```
 
-This will open the chat application GUI.
+Alternatively, you can use a configuration file:
 
-## Using the Chat Application
+```bash
+python server/run_server.py --id server1 --port 8001 --data-dir ./data/server1 --config-file cluster_config.json
+```
 
-1. **Register a New Account**:
-   - Enter a username and password
-   - Click "Register"
+Where `cluster_config.json` contains:
 
-2. **Login**:
-   - Enter your credentials
-   - Click "Login"
+```json
+{
+  "servers": {
+    "server1": "localhost:8001",
+    "server2": "localhost:8002",
+    "server3": "localhost:8003"
+  }
+}
+```
 
-3. **Send Messages**:
-   - Enter recipient's username in the "To:" field
-   - Type your message
-   - Click "Send"
+### Using the CLI Client
 
-4. **View Messages**:
-   - Messages appear in the main chat display
-   - Unread messages are highlighted
-   - Click a message to mark it as read
+We implement a consensus module that follows this format:
 
-5. **Other Features**:
-   - Refresh user list to see online users
-   - Delete selected messages
-   - Logout when done
-   - Delete account if needed
+1. **Leader Election**:
+   - Highest id wins.
 
-## Fault Tolerance Features
+2. **Log Replication**:
+   - Append-only log structure.
+   - Leader-driven replication.
+   - Commit index tracking.
 
-The system is designed to be 2-fault tolerant:
-- Can continue operating with up to 2 server failures
-- Messages are persisted across server restarts
-- Automatic failover to available replicas
-- Automatic leader election when primary fails
+3. **Cluster Membership**:
+   - Single-server changes for safety. This means that we only allow a single server to change the state of the cluster.
+   - Joint consensus for configuration changes. Thus, the joint consensus works by having a majority of the servers agree on the new configuration.
 
-## Testing Fault Tolerance
+## Fault Tolerance Capabilities
 
-1. Start all three replicas and the client
-2. Try killing any two replicas (Ctrl+C in their terminal windows)
-3. The system will continue to work with the remaining replica
-4. Restart the killed replicas to see them rejoin the cluster
+The system can handle:
 
-## Troubleshooting
+1. **Server Failures**:
+   - Automatic leader election when leader fails.
+   - Clients automatically reconnect to available servers.
+   - Log replication ensures no data loss. Since logs are replicated to all servers, we can recover from a server failure by having the other servers replicate the log to the new server.
 
-1. If you see "Address already in use":
-   ```bash
-   # Check for existing Python processes
-   ps aux | grep python
-   # Kill the specific process
-   kill <process_id>
-   ```
+2. **Network Partitions**:
+   - Only the majority partition can make progress.
 
-2. If client can't connect:
-   - Ensure at least one server replica is running
-   - Check that you're using the correct port (50051, 50052, or 50053)
-   - Make sure you're in the virtual environment
+3. **Process Crashes**:
+   - Persistent storage enables recovery after crashes.
+   - Log replay brings servers back to consistent state.
+
+## Running Tests
+
+To run the test suite:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all tests
+python -m pytest reg/tests/
+
+# Run specific test files
+python -m pytest reg/tests/test_client.py
+python -m pytest reg/tests/test_server.py
+python -m pytest reg/tests/test_protocol.py
+python -m pytest reg/tests/test_db.py
+
+# Run tests with verbose output
+python -m pytest -v reg/tests/
+
+# Run tests and show coverage
+python -m pytest --cov=reg reg/tests/
+```
+
+The test suite includes:
+- Client functionality tests (authentication, message sending)
+- Server functionality tests (request handling, state management)
+- Database tests (persistence, data integrity)
+- Protocol tests (message serialization, protocol compliance)
+
+## Implementation Notes
+
+- We used gRPC for efficient bi-directional streaming.
+- We used Protocol Buffers for serialization. This is like JSON, but smaller and faster.
+- All modifications to the chat state go through the log to ensure consistency.
+- Message delivery uses at-least-once semantics with client-side deduplication.
