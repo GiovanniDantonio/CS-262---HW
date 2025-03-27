@@ -28,9 +28,10 @@ class ChatClient:
         self.master.geometry("600x800")
         self.username = None
         
-        # Read base configuration
+        # Read configuration
         self.config = self._load_config()
-        self.base_addr = f"{self.config['host']}:{self.config['port']}"
+        endpoint = self.config['virtual_endpoint']
+        self.virtual_addr = f"{endpoint['host']}:{endpoint['port']}"
         
         # Initialize connection with automatic retry capability
         self._initialize_connection()
@@ -50,7 +51,7 @@ class ChatClient:
         """Initialize gRPC connection with automatic retry and reconnection."""
         # Create channel with automatic reconnection options
         self.channel = grpc.insecure_channel(
-            self.base_addr,
+            self.virtual_addr,
             options=[
                 ('grpc.enable_retries', 1),
                 ('grpc.keepalive_time_ms', 10000),
@@ -63,7 +64,7 @@ class ChatClient:
         )
         self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
         
-        # Add channel connectivity callback
+        # Setup connectivity monitoring
         self._setup_connectivity_monitoring()
 
     def _setup_connectivity_monitoring(self):
@@ -72,9 +73,10 @@ class ChatClient:
             if connectivity in [grpc.ChannelConnectivity.TRANSIENT_FAILURE, 
                               grpc.ChannelConnectivity.SHUTDOWN]:
                 logger.info("Connection lost, attempting to reconnect...")
+                # Just try to reconnect to same virtual IP - new leader will be there
                 self.channel.subscribe(_on_connectivity_change, try_to_connect=True)
             elif connectivity == grpc.ChannelConnectivity.READY:
-                logger.info("Successfully connected to server")
+                logger.info("Successfully connected to virtual endpoint")
 
         self.channel.subscribe(_on_connectivity_change, try_to_connect=True)
 
